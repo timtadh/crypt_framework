@@ -23,7 +23,9 @@ def create_secret():
     
 def create_server_keyfile(server_stub_path, user_file_list):
     server_stub = nDDB.openAdvanceDDB(server_stub_path)
+    print 'about to create secret'
     key = create_key()
+    print 'secret created'
     secret = server_stub['secret']
     salt_hex = server_stub['salt']
     user_dict = {}
