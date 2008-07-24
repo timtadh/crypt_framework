@@ -5,12 +5,13 @@ from Crypto.Hash import SHA256
 import qcrypt, os
 
 debug = False
+HASH_REPS = 50000
 
 def __saltedhash(string, salt):
     sha256 = SHA256.new()
     sha256.update(string)
     sha256.update(qcrypt.denormalize(salt))
-    for x in xrange(100000): 
+    for x in xrange(HASH_REPS): 
         sha256.update(sha256.digest())
         if x % 10: sha256.update(salt)
     return sha256
@@ -24,7 +25,7 @@ def saltedhash_hex(string, salt):
 def __hash(string):
     sha256 = SHA256.new()
     sha256.update(string)
-    for x in xrange(100000): sha256.update(sha256.digest())
+    for x in xrange(HASH_REPS): sha256.update(sha256.digest())
     return sha256
 
 def hash_bin(string):

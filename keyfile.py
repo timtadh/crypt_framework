@@ -6,10 +6,8 @@ from Crypto.Cipher import AES
 from Crypto.PublicKey import RSA
 from Crypto.Hash import SHA256
 
-def create_client_user(login_name, f_name, l_name, password, salt_bin, email):
-    salt = qcrypt.normalize(salt_bin)
-    pass_hash = auth.saltedhash_hex(password, salt)
-    d = {'login_name':login_name, 'f_name':f_name, 'l_name':l_name, 'salt':salt, 'email':email}
+def create_client_user(login_name, f_name, l_name, salt_hex, email):
+    d = {'login_name':login_name, 'f_name':f_name, 'l_name':l_name, 'salt':salt_hex, 'email':email}
     return d
 
 def create_server_user(login_name, f_name, l_name, pass_hash, email):
@@ -23,20 +21,33 @@ def create_key():
 def create_secret():
     return qcrypt.normalize(os.urandom(256))
     
-def create_server_keyfile(user_list):
+def create_server_keyfile(server_stub_path, user_file_list):
+    server_stub = nDDB.openAdvanceDDB(server_stub_path)
     key = create_key()
+    secret = server_stub['secret']
+    salt_hex = server_stub['salt']
+    user_dict = {}
+    for path in user_file_list:
+        user = nDDB.openAdvanceDDB(path)
+        user_dict.update({user['login_name']:user})
+    d = {'key':key, 'secret':secret, 'salt':salt_hex, 'users':user_dict}
+    return d
+    
+def create_server_keystub():
     secret = create_secret()
     salt = qcrypt.normalize(os.urandom(64))
-    user_dict = {}
-    for user in user_list:
-        user_dict.update({user['login_name']:user})
-    d = {'key':key, 'secret':secret, 'salt':salt, 'users':user_dict}
+    d = {'secret':secret, 'salt':salt}
     return d
+    
+def save_stub_files(server_stub):
+    secret_hash = auth.saltedhash_hex(server_stub['secret'], server_stub['salt'])
+    f = open('client_stub', 'w')
+    f.write(secret_hash)
+    f.close()
+    nDDB.saveAdvanceDDB('server_stub', server_stub)
 
 def create_client_keyfile(server_secret_hash, user):
-    key = create_key()
-    secret_hash = auth.hash_hex(secret)
-    d = {'key':key, 'server_secret_hash':server_secret_hash, 'user':user}
+    d = {'server_secret_hash':server_secret_hash, 'user':user}
     return d
     
 def save_keyfile(k, path):
