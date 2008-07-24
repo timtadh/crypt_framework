@@ -74,6 +74,14 @@ class tcpClient:
         
         self.password = raw_input('password: ')
         
+        #----------------DEBUG----------------#
+        self.pass_hash = self.user['pass_hash']
+        if self.pass_hash != auth.saltedhash_hex(self.password, self.user['salt']): 
+            print "passwords don't match error"
+            sys.exit()
+        else: print 'passwords match'
+        #----------------DEBUG----------------#
+        
         self.server_key = None
 
     def connect(self):
@@ -139,7 +147,7 @@ class tcpClient:
         self.connect()
         
         a = None
-        self.tcpCliSock.sendall(nDDB.encode({'type':'request_auth', 'value':None}))
+        self.tcpCliSock.sendall(nDDB.encode({'type':'request_auth', 'value':self.user['login_name']}))
         while not a:
             data = ''
             while data[-3:] != '>~>': data += self.tcpCliSock.recv(1024)
@@ -149,7 +157,7 @@ class tcpClient:
             
             if d and d.has_key('type') and d.has_key('value') and d['type'] == 'sign_auth':
                 a = d['value']
-                signed_a = auth.sign_auth(self.password, self.user['salt'], a)
+                signed_a = auth.sign_auth(self.password, self.user['salt'], self.server_secret_hash, a)
                 d = {'type':'verify_auth', 'value':{'signed_a':signed_a, 'login_name':self.user['login_name']}}
                 self.tcpCliSock.sendall(nDDB.encode(d))
             else:
@@ -176,7 +184,8 @@ class tcpClient:
             print 'wtf'
             sys.exit()
         
-        a = auth.create_auth(self.password, self.user['salt'], os.urandom(64))
+        ran_str = os.urandom(64)
+        a = auth.create_auth(self.server_secret_hash, ran_str)
         self.tcpCliSock.sendall(nDDB.encode({'type':'sign_auth', 'value':a}))
         
         data = ''
@@ -188,20 +197,20 @@ class tcpClient:
         if d and d.has_key('type') and d.has_key('value') and d['type'] == 'verify_auth':
             print 'about to verify'
             signed_a = d['value']
-            vr = auth.verify_auth(self.server_secret_hash, a, signed_a)
+            vr = auth.verify_auth(self.password, self.user['salt'], ran_str, signed_a)
             self.tcpCliSock.sendall(nDDB.encode({'type':'verification_result', 'value':str(int(vr))}))
             if not vr: 
                 print 'verification failed'
                 sys.exit()
             print 'server verified'
         
-        data = ''
-        while data != 'pubkeyset':
-            k = self.pubkey.publickey().__getstate__()
-            k = qcrypt.normalize(nDDB.encode(k))
-            signature = auth.sign_msg(self.server_secret_hash, k)
-            self.tcpCliSock.sendall(nDDB.encode({'type':'setpubkey', 'value':k, 'signature':signature}))
-            data = self.tcpCliSock.recv(4096)
+        # data = ''
+        # while data != 'pubkeyset':
+            # k = self.pubkey.publickey().__getstate__()
+            # k = qcrypt.normalize(nDDB.encode(k))
+            # signature = auth.sign_msg(self.server_secret_hash, k)
+            # self.tcpCliSock.sendall(nDDB.encode({'type':'setpubkey', 'value':k, 'signature':signature}))
+            # data = self.tcpCliSock.recv(4096)
         
         k = None
         while k is None:

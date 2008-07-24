@@ -68,14 +68,18 @@ class tcpServer:
                     thread.start_new_thread(self._process_msg, (cliNum, d, l))
                 
                 elif d['type'] == 'request_auth':
-                    a = auth.create_auth(self.secret, self.salt, os.urandom(64))
-                    self.authentications.update({cliNum:a})
+                    login_name = d['value']
+                    cli_secret_hash = self.users[login_name]['pass_hash']
+                    ran_str = os.urandom(64)
+                    a = auth.create_auth(cli_secret_hash, ran_str)
+                    self.authentications.update({cliNum:ran_str})
                     cli = self.cliList[cliNum]
                     cli.sendall(nDDB.encode({'type':'sign_auth', 'value':a}))
                 
                 elif d['type'] == 'sign_auth':
                     a = d['value']
-                    signed_a = auth.sign_auth(self.secret, self.salt, a)
+                    cli_secret_hash = self.users[login_name]['pass_hash']
+                    signed_a = auth.sign_auth(self.secret, self.salt, cli_secret_hash, a)
                     cli = self.cliList[cliNum]
                     cli.sendall(nDDB.encode({'type':'verify_auth', 'value':signed_a}))
                 
@@ -85,9 +89,8 @@ class tcpServer:
                     if self.authentications.has_key(cliNum):
                         login_name = d['value']['login_name']
                         signed_a = d['value']['signed_a']
-                        cli_secret_hash = self.users[login_name]['pass_hash']
-                        a = self.authentications[cliNum]
-                        vr = auth.verify_auth(cli_secret_hash, a, signed_a)
+                        ran_str = self.authentications[cliNum]
+                        vr = auth.verify_auth(self.secret, self.salt, ran_str, signed_a)
                         cli.sendall(nDDB.encode({'type':'verification_result', 'value':str(int(vr))}))
                         if vr:
                             print 'client verified'
