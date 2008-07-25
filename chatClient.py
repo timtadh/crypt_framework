@@ -59,10 +59,7 @@ class tcpClient:
         self.stop = False
         self.printer = printer
         
-        self.keyfile = keyfile.load_keyfile(raw_input('key file path: '))
-        
-        self.pubkey = RSA.generate(1, os.urandom)
-        self.pubkey.__setstate__(self.keyfile['key'])
+        self.keyfile = keyfile.load_client_keyfile(raw_input('key file path: '))
         
         sha256 = SHA256.new()
         sha256.update(os.urandom(64))
@@ -75,11 +72,11 @@ class tcpClient:
         self.password = raw_input('password: ')
         
         #----------------DEBUG----------------#
-        self.pass_hash = self.user['pass_hash']
-        if self.pass_hash != auth.saltedhash_hex(self.password, self.user['salt']): 
-            print "passwords don't match error"
-            sys.exit()
-        else: print 'passwords match'
+        # self.pass_hash = self.user['pass_hash']
+        # if self.pass_hash != auth.saltedhash_hex(self.password, self.user['salt']): 
+            # print "passwords don't match error"
+            # sys.exit()
+        # else: print 'passwords match'
         #----------------DEBUG----------------#
         
         self.server_key = None

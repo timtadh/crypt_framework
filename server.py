@@ -18,7 +18,7 @@ class tcpServer:
         self.hosts = {}
         self.hosts_cliNum = {}
         
-        self.keyfile = keyfile.load_keyfile('server_key')
+        self.keyfile = keyfile.load_server_keyfile('server_key')
         print self.keyfile
         self.key = RSA.generate(1, os.urandom)
         self.key.__setstate__(self.keyfile['key'])

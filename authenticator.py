@@ -4,7 +4,7 @@ from Crypto.Cipher import AES
 from Crypto.Hash import SHA256
 import qcrypt, os
 
-debug = False
+debug = True
 HASH_REPS = 50000
 
 def __saltedhash(string, salt):

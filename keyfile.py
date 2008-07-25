@@ -42,7 +42,7 @@ def create_server_keystub():
     return d
     
 def save_stub_files(server_stub):
-    secret_hash = auth.saltedhash_hex(server_stub['secret'], server_stub['salt'])
+    secret_hash = auth.saltedhash_hex(qcrypt.denormalize(server_stub['secret']), server_stub['salt'])
     f = open('client_stub', 'w')
     f.write(secret_hash)
     f.close()
@@ -63,7 +63,11 @@ def proc_key_dict(d):
             pass
     return d
 
-def load_keyfile(path):
+def load_server_keyfile(path):
     k = nDDB.openAdvanceDDB(path)
     k['key'] = proc_key_dict(k['key'])
+    return k
+    
+def load_client_keyfile(path):
+    k = nDDB.openAdvanceDDB(path)
     return k
