@@ -42,7 +42,22 @@ def get_some_pi(max_start, message_hex):
     pi = f.read(len(message_hex)/2)
     f.close()
     return pi
+
+def xor_in_pi(text_bin):
+    flen = int(os.stat('pi.bin')[stat.ST_SIZE])
+    max_start = flen - len(text_bin)
+    some_pi = get_some_pi(max_start, qcrypt.normalize(text_bin))
+    xor = XOR.new(some_pi)
+    ciphertext = xor.encrypt(text_bin)
+    if debug:
+        print '\n------xor_in_pi------'
+        print qcrypt.normalize(text_bin)
+        print qcrypt.normalize(some_pi)
+        print qcrypt.normalize(ciphertext)
+        print '------xor_in_pi------\n'
     
+    return ciphertext
+
 def create_auth(secret_hash_normalized, random_str):
     if len(random_str)%16 != 0: raise Exception, 'not len(random_str) === 16 mod 16'
     aes = AES.new(qcrypt.denormalize(secret_hash_normalized), AES.MODE_CBC)
@@ -58,11 +73,7 @@ def sign_auth(secret, salt, secret_hash_normalized, auth_normalized):
     auth = qcrypt.denormalize(auth_normalized)
     aes = AES.new(saltedhash_bin(secret, salt), AES.MODE_CBC)
     plaintext = aes.decrypt(auth)
-    flen = int(os.stat('pi.bin')[stat.ST_SIZE])
-    max_start = flen - len(plaintext)
-    some_pi = get_some_pi(max_start, qcrypt.normalize(plaintext))
-    xor = XOR.new(some_pi)
-    new_plaintext = xor.encrypt(plaintext)
+    new_plaintext = xor_in_pi(plaintext)
     aes = AES.new(qcrypt.denormalize(secret_hash_normalized), AES.MODE_CBC)
     ciphertext = qcrypt.normalize(aes.encrypt(new_plaintext))
     if debug:
@@ -74,11 +85,7 @@ def sign_auth(secret, salt, secret_hash_normalized, auth_normalized):
     return ciphertext
 
 def verify_auth(secret, salt, org_random_str, auth_normalized):
-    flen = int(os.stat('pi.bin')[stat.ST_SIZE])
-    max_start = flen - len(org_random_str)
-    some_pi = get_some_pi(max_start, qcrypt.normalize(org_random_str))
-    xor = XOR.new(some_pi)
-    xored_random_str = xor.encrypt(org_random_str)
+    xored_random_str = xor_in_pi(org_random_str)
     auth = qcrypt.denormalize(auth_normalized)
     aes = AES.new(saltedhash_bin(secret, salt), AES.MODE_CBC)
     new_random_str = aes.decrypt(auth)

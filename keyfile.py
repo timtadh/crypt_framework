@@ -34,7 +34,13 @@ def create_server_keyfile(server_stub_path, user_file_list):
     print 'secret created'
     d = {'key':key, 'secret':secret, 'salt':salt_hex, 'users':user_dict}
     return d
-    
+
+def add_user_to_server(server_keyfile_path, user_file):
+    key = load_server_keyfile(server_keyfile_path)
+    user = nDDB.openAdvanceDDB(user_file)
+    key['users'].update({user['login_name']:user})
+    save_keyfile(key, server_keyfile_path)
+
 def create_server_keystub():
     secret = create_secret()
     salt = qcrypt.normalize(os.urandom(64))
