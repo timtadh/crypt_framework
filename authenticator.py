@@ -1,8 +1,8 @@
 #Implements a challenge-response authentication scheme
 
-from Crypto.Cipher import AES
+from Crypto.Cipher import AES, XOR
 from Crypto.Hash import SHA256
-import qcrypt, os
+import qcrypt, os, stat
 
 debug = True
 HASH_REPS = 50000
@@ -33,7 +33,16 @@ def hash_bin(string):
 
 def hash_hex(string):
     return __hash(string).hexdigest()
-
+    
+def get_some_pi(max_start, message_hex):
+    p = int(message_hex[:4], 16)
+    while (p > max_start): p = p/2
+    f = open('pi.bin', 'rb')
+    f.seek(p)
+    pi = f.read(len(message_hex)/2)
+    f.close()
+    return pi
+    
 def create_auth(secret_hash_normalized, random_str):
     if len(random_str)%16 != 0: raise Exception, 'not len(random_str) === 16 mod 16'
     aes = AES.new(qcrypt.denormalize(secret_hash_normalized), AES.MODE_CBC)
@@ -49,8 +58,13 @@ def sign_auth(secret, salt, secret_hash_normalized, auth_normalized):
     auth = qcrypt.denormalize(auth_normalized)
     aes = AES.new(saltedhash_bin(secret, salt), AES.MODE_CBC)
     plaintext = aes.decrypt(auth)
+    flen = int(os.stat('pi.bin')[stat.ST_SIZE])
+    max_start = flen - len(plaintext)
+    some_pi = get_some_pi(max_start, qcrypt.normalize(plaintext))
+    xor = XOR.new(some_pi)
+    new_plaintext = xor.encrypt(plaintext)
     aes = AES.new(qcrypt.denormalize(secret_hash_normalized), AES.MODE_CBC)
-    ciphertext = qcrypt.normalize(aes.encrypt(plaintext))
+    ciphertext = qcrypt.normalize(aes.encrypt(new_plaintext))
     if debug:
         print '\n------sign_auth------'
         print saltedhash_hex(secret, salt)
@@ -60,16 +74,21 @@ def sign_auth(secret, salt, secret_hash_normalized, auth_normalized):
     return ciphertext
 
 def verify_auth(secret, salt, org_random_str, auth_normalized):
+    flen = int(os.stat('pi.bin')[stat.ST_SIZE])
+    max_start = flen - len(org_random_str)
+    some_pi = get_some_pi(max_start, qcrypt.normalize(org_random_str))
+    xor = XOR.new(some_pi)
+    xored_random_str = xor.encrypt(org_random_str)
     auth = qcrypt.denormalize(auth_normalized)
     aes = AES.new(saltedhash_bin(secret, salt), AES.MODE_CBC)
     new_random_str = aes.decrypt(auth)
     if debug:
         print '\n------verify_auth------'
         print saltedhash_hex(secret, salt)
-        print qcrypt.normalize(org_random_str)
+        print qcrypt.normalize(xored_random_str)
         print qcrypt.normalize(new_random_str)
         print '------verify_auth------\n'
-    return bool(org_random_str == new_random_str)
+    return bool(xored_random_str == new_random_str)
 
 def sign_msg(secret_hash_normalized, msg):
     plaintext, spaces_added = qcrypt._appendSpaces(msg)
