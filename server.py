@@ -6,6 +6,9 @@ from Crypto.Cipher import AES
 from Crypto.PublicKey import RSA
 from Crypto.Hash import SHA256
 
+END_MARK = 'STOP'
+END_LEN = 4
+
 class tcpServer:
 
     def __init__(self, host='', port=21567, bufsize=4096):
@@ -52,8 +55,7 @@ class tcpServer:
     def _client(self, cliNum, address, lock):
         self.activeCli.append(cliNum)
         while 1:
-            data = ''
-            while data[-3:] != '>~>': data += self.cliList[cliNum].recv(self.BUFSIZE)
+            data = self.read_data(self.cliList[cliNum])
             print data
             print cliNum, self.authenticated, cliNum in self.authenticated, self.activeCli
             
@@ -74,14 +76,14 @@ class tcpServer:
                     a = auth.create_auth(cli_secret_hash, ran_str)
                     self.authentications.update({cliNum:ran_str})
                     cli = self.cliList[cliNum]
-                    cli.sendall(nDDB.encode({'type':'sign_auth', 'value':a}))
+                    self.send_dict(cli, {'type':'sign_auth', 'value':a})
                 
                 elif d['type'] == 'sign_auth':
                     a = d['value']
                     cli_secret_hash = self.users[login_name]['pass_hash']
                     signed_a = auth.sign_auth(self.secret, self.salt, cli_secret_hash, a)
                     cli = self.cliList[cliNum]
-                    cli.sendall(nDDB.encode({'type':'verify_auth', 'value':signed_a}))
+                    self.send_dict(cli, {'type':'verify_auth', 'value':signed_a})
                 
                 elif d['type'] == 'verify_auth':
                     print 'VERIFY AUTH REACHED'
@@ -91,7 +93,7 @@ class tcpServer:
                         signed_a = d['value']['signed_a']
                         ran_str = self.authentications[cliNum]
                         vr = auth.verify_auth(self.secret, self.salt, ran_str, signed_a)
-                        cli.sendall(nDDB.encode({'type':'verification_result', 'value':str(int(vr))}))
+                        self.send_dict(cli, {'type':'verification_result', 'value':str(int(vr))})
                         if vr:
                             print 'client verified'
                             self.authenticated.append(cliNum)
@@ -102,7 +104,7 @@ class tcpServer:
                         else:
                             break
                     else:
-                        cli.sendall(nDDB.encode({'type':'verification_result', 'value':'0'}))
+                        self.send_dict(cli, {'type':'verification_result', 'value':'0'})
                 
                 elif d['type'] == 'verification_result':
                     try:
@@ -121,7 +123,7 @@ class tcpServer:
                     k = self.key.publickey().__getstate__()
                     k = qcrypt.normalize(nDDB.encode(k))
                     signature = self._sign_msg(cliNum, k)
-                    cli.sendall(nDDB.encode({'type':'key', 'value':k, 'signature':signature}))
+                    self.send_dict(cli, {'type':'key', 'value':k, 'signature':signature})
                     print 'key sent'
                     
                 elif d['type'] == 'setpubkey' and cliNum in self.authenticated:
@@ -159,7 +161,6 @@ class tcpServer:
                     
                     
                 elif d['type'] == 'stop':
-                    #self.cliList[cliNum].sendall(data)
                     break
                     
                 else:
@@ -198,11 +199,23 @@ class tcpServer:
                 #signature = self._sign_msg(x, msg)
                 signature = 0
                 print msg
-                self.cliList[x].sendall(nDDB.encode({'type':'message', 'value':msg, 'signature':signature}))
+                self.send_dict(self.cliList[x], {'type':'message', 'value':msg, 'signature':signature})
             except:
                 pass
             
+    def read_data(self, sock):
+        data = ''
+        while data == '':
+            try:
+                while data[(-3-END_LEN):] != '>~>STOP': data += sock.recv(1024)
+            except:
+                data = ''
+                continue
+        data = data[:-1*END_LEN]
+        return data
     
+    def send_dict(self, sock, msg_dict):
+        sock.sendall(nDDB.encode(msg_dict)+END_MARK)
 
 server = tcpServer()
 server.startServer()

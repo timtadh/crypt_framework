@@ -6,6 +6,9 @@ import authenticator as auth
 from Crypto.PublicKey import RSA
 from Crypto.Hash import SHA256
 
+END_MARK = 'STOP'
+END_LEN = 4
+
 class output:
     def __init__(self, name='Tim'):
         self.name = name+':\t'
@@ -90,12 +93,12 @@ class tcpClient:
         msg = qcrypt.aes_encrypt(data, self.aeskey)
         #signature = auth.sign_msg(self.server_secret_hash, msg)
         signature = 0
-        self.tcpCliSock.sendall(nDDB.encode({'type':'message', 'value':msg, 'signature':signature}))
+        self.send_dict(self.tcpCliSock, {'type':'message', 'value':msg, 'signature':signature})
         #printer.printInfo(data)
 
     def stopListening(self):
         self.stop = True
-        self.tcpCliSock.send(nDDB.encode({'type':'stop', 'value':None}))
+        self.send_dict(self.tcpCliSock, {'type':'stop', 'value':None})
         
     def disconnect(self):
         self.tcpCliSock.close()
@@ -103,16 +106,25 @@ class tcpClient:
     def deactivateClient(self):
         self.stopListening()
         self.disconnect()
-
+    
+    def read_data(self, sock):
+        data = ''
+        while data == '':
+            try:
+                while data[(-3-END_LEN):] != '>~>STOP': data += sock.recv(1024)
+            except:
+                data = ''
+                continue
+        data = data[:-1*END_LEN]
+        return data
+    
+    def send_dict(self, sock, msg_dict):
+        sock.sendall(nDDB.encode(msg_dict)+END_MARK)
+    
     def listen(self, lock=False, stuff=False):
         print 'listening'
         while 1:
-            data = ''
-            try:
-                while data[-3:] != '>~>': data += self.tcpCliSock.recv(1024)
-            except:
-                continue
-            
+            data = self.read_data(self.tcpCliSock)
             print '\n--------'
             print data
             
@@ -144,11 +156,9 @@ class tcpClient:
         self.connect()
         
         a = None
-        self.tcpCliSock.sendall(nDDB.encode({'type':'request_auth', 'value':self.user['login_name']}))
+        self.send_dict(self.tcpCliSock, {'type':'request_auth', 'value':self.user['login_name']})
         while not a:
-            data = ''
-            while data[-3:] != '>~>': data += self.tcpCliSock.recv(1024)
-            print data
+            data = self.read_data(self.tcpCliSock)
             
             d = nDDB.decode(data)
             
@@ -156,13 +166,11 @@ class tcpClient:
                 a = d['value']
                 signed_a = auth.sign_auth(self.password, self.user['salt'], self.server_secret_hash, a)
                 d = {'type':'verify_auth', 'value':{'signed_a':signed_a, 'login_name':self.user['login_name']}}
-                self.tcpCliSock.sendall(nDDB.encode(d))
+                self.send_dict(self.tcpCliSock, d)
             else:
-                self.tcpCliSock.sendall(nDDB.encode({'type':'request_auth', 'value':None}))
+                self.send_dict(self.tcpCliSock, {'type':'request_auth', 'value':None})
         
-        data = ''
-        while data[-3:] != '>~>': data += self.tcpCliSock.recv(1024)
-        print data
+        data = self.read_data(self.tcpCliSock)
         
         d = nDDB.decode(data)
         
@@ -183,11 +191,9 @@ class tcpClient:
         
         ran_str = os.urandom(64)
         a = auth.create_auth(self.server_secret_hash, ran_str)
-        self.tcpCliSock.sendall(nDDB.encode({'type':'sign_auth', 'value':a}))
+        self.send_dict(self.tcpCliSock, {'type':'sign_auth', 'value':a})
         
-        data = ''
-        while data[-3:] != '>~>': data += self.tcpCliSock.recv(1024)
-        print data
+        data = self.read_data(self.tcpCliSock)
         
         d = nDDB.decode(data)
         
@@ -195,7 +201,7 @@ class tcpClient:
             print 'about to verify'
             signed_a = d['value']
             vr = auth.verify_auth(self.password, self.user['salt'], ran_str, signed_a)
-            self.tcpCliSock.sendall(nDDB.encode({'type':'verification_result', 'value':str(int(vr))}))
+            self.send_dict(self.tcpCliSock, {'type':'verification_result', 'value':str(int(vr))})
             if not vr: 
                 print 'verification failed'
                 sys.exit()
@@ -206,13 +212,13 @@ class tcpClient:
             # k = self.pubkey.publickey().__getstate__()
             # k = qcrypt.normalize(nDDB.encode(k))
             # signature = auth.sign_msg(self.server_secret_hash, k)
-            # self.tcpCliSock.sendall(nDDB.encode({'type':'setpubkey', 'value':k, 'signature':signature}))
+            # self.send_dict(self.tcpCliSock, {'type':'setpubkey', 'value':k, 'signature':signature})
             # data = self.tcpCliSock.recv(4096)
         
         k = None
         while k is None:
-            self.tcpCliSock.sendall(nDDB.encode({'type':'getkey', 'value':0}))
-            data = self.tcpCliSock.recv(4096)
+            self.send_dict(self.tcpCliSock, {'type':'getkey', 'value':0})
+            data = self.read_data(self.tcpCliSock)
             d = nDDB.decode(data)
             print d
             if d and d.has_key('type') and d.has_key('value') and d['type'] == 'key':
@@ -239,7 +245,7 @@ class tcpClient:
         while data != 'aeskeyset':
             k = qcrypt.pub_encrypt(self.aeskey, self.server_key)
             signature = auth.sign_msg(self.server_secret_hash, k)
-            self.tcpCliSock.sendall(nDDB.encode({'type':'setaeskey', 'value':k, 'signature':signature}))
+            self.send_dict(self.tcpCliSock, {'type':'setaeskey', 'value':k, 'signature':signature})
             data = self.tcpCliSock.recv(4096)
         
         lock = thread.allocate_lock()
