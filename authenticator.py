@@ -4,6 +4,9 @@ from Crypto.Cipher import AES, XOR
 from Crypto.Hash import SHA256
 import qcrypt, os, stat
 
+#note: it turns out that two way single secrete authentication may be harder than it seems
+      #I need to rethink my entire scheme as it is subject to replay attacks against it
+
 debug = True
 HASH_REPS = 50000
 
