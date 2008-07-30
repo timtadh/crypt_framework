@@ -2,6 +2,13 @@
 
 from Crypto.Cipher import AES
 from Crypto.Hash import SHA256
+import os
+
+def create_aes_key():
+    sha256 = SHA256.new()
+    sha256.update(os.urandom(64))
+    for x in xrange(5000): sha256.update(sha256.digest())
+    return sha256.digest()
 
 def pub_decrypt(ciphertext, key):
     try:

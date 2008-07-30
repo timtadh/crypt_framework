@@ -16,14 +16,14 @@ class output:
     def setGui(self, gui):
         self.gui = gui
 
-    def setNetwork(self, network):
-        self.network = network
+    def setTcpClient(self, tcp_client):
+        self.tcp_client = tcp_client
         
     def printInfo(self, data):
         self.gui.printText.insert(END, data+'\n')
 
     def sendInfo(self, data):
-        self.network.send(data)
+        self.tcp_client.send(data)
 
 class Gui:
     def __init__(self, root, printer):
@@ -54,7 +54,7 @@ class Gui:
 class tcpClient:
 
     def __init__(self, printer, host, port=21567, bufsize=1024):
-        printer.setNetwork(self)
+        printer.setTcpClient(self)
         self.HOST = host
         self.PORT = port
         self.BUFSIZE = bufsize
