@@ -50,7 +50,7 @@ authenticated_exist_check = create_existance_check_dec('authenticated')
 authenticated_true_check = create_value_check_dec('authenticated', True)
 key_agreement_true_check = create_value_check_dec('key_agreement', True)
 
-class SocketLink(object):
+class CommunicationLink(object):
     
     def __init__(self, sock, secret, salt, partner_secret_hash):
         self.sock = sock
