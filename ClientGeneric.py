@@ -8,7 +8,7 @@ from Crypto.Hash import SHA256
 from CommGenerics import SocketGeneric
 from network import CommunicationLink
 
-class GenericClient:
+class ClientGeneric(object):
 
     def __init__(self, commGeneric, password, keyfile, externalPrint=None):
         self.stop = False

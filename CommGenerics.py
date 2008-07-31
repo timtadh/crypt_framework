@@ -14,11 +14,16 @@ class CommGenericBase(object):
     def recieve(self): pass
     def send_dict(self, d): pass
     def listen(self): pass
+    def accept(self): pass
     def close(self): pass
     def set_proc_syscommand(self, proc_func):
         self.proc_syscommand = proc_func
 
 closed_false_check = create_value_check_dec('closed', False)
+connected_true_check = create_value_check_dec('connected', True)
+connected_false_check = create_value_check_dec('connected', False)
+listening_true_check = create_value_check_dec('listening', True)
+listening_false_check = create_value_check_dec('listening', False)
 
 class SocketGeneric(CommGenericBase):
     
@@ -35,12 +40,19 @@ class SocketGeneric(CommGenericBase):
         self.BUFSIZE = bufsize
         self.ADDR = (self.HOST, self.PORT)
         self.closed = False
-     
+        self.connected = False
+        self.listening = False
+    
+    @closed_false_check
+    @connected_false_check
+    @listening_false_check
     def connect(self):
         self.sock = socket(AF_INET, SOCK_STREAM)
         self.sock.connect(self.ADDR)
     
     @closed_false_check
+    @listening_false_check
+    @connected_true_check
     def send(self, msg):
         self.sock.sendall(msg+self.END_MARK)
     
@@ -48,6 +60,8 @@ class SocketGeneric(CommGenericBase):
         self.send(nDDB.encode(d))
     
     @closed_false_check
+    @listening_false_check
+    @connected_true_check
     def recieve(self): 
         data = ''
         while not self.closed and data == '':
@@ -71,8 +85,21 @@ class SocketGeneric(CommGenericBase):
         self.sock.close()
     
     @closed_false_check
-    def listen(self):
-        self.sock.listen(5)
-        
+    @connected_false_check
+    @listening_false_check
+    def listen(self, backlog=5):
+        self.sock.listen(backlog)
+    
+    @closed_false_check
+    @connected_false_check
+    @listening_true_check
+    def accept(self):
+        sock, addr = self.sock.accept()
+        sock_generic = SocketGeneric('', self.PORT, self.BUFSIZE)
+        sock_generic.ADDR = addr
+        sock_generic.HOST = addr[0]
+        sock_generic.sock = sock
+        return sock_generic
+    
     def set_proc_command(self, proc_func):
         self.proc_command = proc_func
