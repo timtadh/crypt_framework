@@ -42,13 +42,15 @@ class SocketGeneric(CommGenericBase):
         self.closed = False
         self.connected = False
         self.listening = False
+        
+        self.sock = socket(AF_INET, SOCK_STREAM)
     
     @closed_false_check
     @connected_false_check
     @listening_false_check
     def connect(self):
-        self.sock = socket(AF_INET, SOCK_STREAM)
         self.sock.connect(self.ADDR)
+        self.connected = True
     
     @closed_false_check
     @listening_false_check
@@ -88,7 +90,9 @@ class SocketGeneric(CommGenericBase):
     @connected_false_check
     @listening_false_check
     def listen(self, backlog=5):
+        self.sock.bind(self.ADDR)
         self.sock.listen(backlog)
+        self.listening = True
     
     @closed_false_check
     @connected_false_check
@@ -99,6 +103,7 @@ class SocketGeneric(CommGenericBase):
         sock_generic.ADDR = addr
         sock_generic.HOST = addr[0]
         sock_generic.sock = sock
+        sock_generic.connected = True
         return sock_generic
     
     def set_proc_command(self, proc_func):

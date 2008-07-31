@@ -24,10 +24,10 @@ def create_value_check_dec(attr, desired_value):
         def h(*args, **kwargs):
             attrs = dir(args[0])
             if ('__dict__' in attrs):
-                if (args[0].__dict__[attr] != desired_value):  raise Exception, attr + ' must equal ' + desired_value
+                if (args[0].__dict__[attr] != desired_value):  raise Exception, attr + ' must equal ' + str(desired_value)
                 return f(*args, **kwargs)
             else:
-                if args.__getattribute__(attr) != desired_value: raise Exception, attr + ' must equal ' + desired_value
+                if args.__getattribute__(attr) != desired_value: raise Exception, attr + ' must equal ' + str(desired_value)
                 return f(*args, **kwargs)
         return h
     return dec

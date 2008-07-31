@@ -11,26 +11,22 @@ from network import CommunicationLink
 class GenericServer_Listener(object):
     
     def __init__(self, commGeneric, keyfile, client_handler):
-        self.commGeneric
-        self.secret = secret
-        self.salt = salt
-        self.pri_key = pri_key
-        self.client_handler = client_handler
-        self.clients = {}
-        
-        self.pri_key = RSA.generate(1, os.urandom)
-        self.pri_key.__setstate__(self.keyfile['key'])
-        
+        self.commGeneric = commGeneric
+        self.keyfile = keyfile
         self.secret = qcrypt.denormalize(self.keyfile['secret'])
         self.salt = self.keyfile['salt']
-        
+        self.pri_key = RSA.generate(1, os.urandom)
+        self.pri_key.__setstate__(self.keyfile['key'])
         self.users = self.keyfile['users']
+        self.client_handler = client_handler
+        self.clients = {}
     
     def start_listening(self):
         self.commGeneric.listen()
         
         handler = self.client_handler(self)
         
+        print 'waiting for connections...'
         while 1:
             socket_generic = self.commGeneric.accept()
             comm_link = CommunicationLink(socket_generic, self.secret, self.salt, None)
@@ -46,8 +42,9 @@ class GenericServer_Listener(object):
     def get_uid(self):
         uid = None
         while uid == None or self.clients.has_key(uid): uid = qcrypt.normalize(os.urandom(8))
+        return uid
     
-    def get_client(uid):
+    def get_client(self, uid):
         if self.clients.has_key(uid): return self.clients[uid]
         else: return None
 
@@ -58,6 +55,7 @@ class GenericServer_ClientHandler(object):
         self.active_clients = []
     
     def handle(self, uid, comm_link, lock):
+        print uid
         self.active_clients.append(uid)
         comm_generic = comm_link.comm
         
@@ -72,7 +70,7 @@ class GenericServer_ClientHandler(object):
             else: sig = None
             
             if command == 'stop':  
-                cli_comm_generic.close()
+                comm_generic.close()
                 return
             
             self.exec_command(uid, command, msg, sig)
@@ -111,7 +109,7 @@ class GenericServer_ClientHandler(object):
         
         def message(msg):
             m = link.recieved_message(msg)
-            self._send(m, cliNum)
+            self._send(m, uid)
             
         def request_auth(msg): 
             link.name = msg
@@ -124,11 +122,11 @@ class GenericServer_ClientHandler(object):
         
         def verification_result(msg, sig):
             msg = qcrypt.denormalize(msg)
-            msg_vr = auth.verify_signature(self.secret, self.salt, msg, sig)
+            msg_vr = auth.verify_signature(link.secret, link.salt, msg, sig)
             vr = bool(int(msg[0]))
             if not msg_vr: return
             if vr: print 'client verified server'
-            else: cli_comm_generic.close()
+            else: comm_generic.close()
             
         def request_pub_key(): link.request_pub_key()
         def set_pub_key(msg, sig): link.set_pub_key(msg, sig)
