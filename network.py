@@ -75,6 +75,7 @@ class CommunicationLink(object):
         msg = qcrypt.normalize(nDDB.encode(k))
         signature = auth.sign_msg(self.partner_secret_hash, msg)
         self.send('set_pub_key', msg, signature)
+        print 'sent signed public key'
     
     @authenticated_exist_check
     @authenticated_true_check
@@ -85,6 +86,7 @@ class CommunicationLink(object):
             k_dict = nDDB.decode(qcrypt.denormalize(msg))
             k = RSA.generate(1, os.urandom)
             k.__setstate__(keyfile.proc_key_dict(k_dict))
+            print 'public key recieved and verified'
         else:
             print 'incorrect message signature'
             k = None
@@ -100,6 +102,7 @@ class CommunicationLink(object):
         signature = auth.sign_msg(self.partner_secret_hash, k)
         self.send('set_aes_key', k, signature)
         self.key_agreement = False
+        print 'sending new aes session key'
         return self.aes_key
     
     @pri_key_check
@@ -115,6 +118,7 @@ class CommunicationLink(object):
             msg = qcrypt.aes_encrypt(AES_SET_MSG, self.aes_key)
             signature = auth.sign_msg(self.partner_secret_hash, msg)
             self.send('confirm_aeskey', msg, signature)
+            print 'set aes key. key agreement reached'
         else:
             k = None
             self.send('bad_aeskey', None)
@@ -132,7 +136,9 @@ class CommunicationLink(object):
         vr = auth.verify_signature(self.secret, self.salt, msg, signature)
         if vr:
             msg_d = qcrypt.aes_decrypt(msg, self.aes_key)
-            if msg_d == AES_SET_MSG: self.key_agreement = True
+            if msg_d == AES_SET_MSG: 
+                self.key_agreement = True
+                print 'aes key exchanged confirmed. key agreement reached'
             else: 
                 self.key_agreement = False
                 self.aes_key = None

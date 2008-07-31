@@ -31,10 +31,6 @@ class tcpServer:
         self.salt = self.keyfile['salt']
         
         self.users = self.keyfile['users']
-        
-        self.cliInfo = {}
-        self.authentications = {}
-        self.authenticated = []
 
     def startServer(self):
         tcpSerSock = socket(AF_INET, SOCK_STREAM)
@@ -146,10 +142,8 @@ class tcpServer:
             link.request_auth()
             
         def sign_auth(msg): link.sign_auth(msg)
-        
-        def verify_auth(msg):
-            link.verify_auth(msg)
-            self.authenticated.append(cliNum)
+        def verify_auth(msg): 
+            if link.verify_auth(msg): print 'server verified client'
         
         def verification_result(msg, sig):
             msg = qcrypt.denormalize(msg)
