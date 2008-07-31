@@ -3,49 +3,17 @@
 from Crypto.PublicKey import RSA
 import authenticator as auth
 import qcrypt, os, keyfile
+from dec_factories import create_existance_check_dec, create_value_check_dec
 
 END_MARK = 'STOP'
 END_LEN = 4
 AES_SET_MSG = 'AES Key Set'
 
-def create_existance_check_dec(attr):
-    def dec(f, *args, **kwargs):
-        def h(*args, **kwargs):
-            if len(args) <= 0: raise Exception, 'must be applied to a class method'
-            attrs = dir(args[0])
-            if '__dict__' in attrs and args[0].__dict__.has_key(attr):
-                if args[0].__dict__[attr] != None:
-                    return f(*args, **kwargs)
-                else:
-                    raise Exception, attr + ' must not be None'
-            elif '__contains__' in attrs and args[0].__contains__(attr):
-                if args.__getattribute__(attr) != None:
-                    return f(*args, **kwargs)
-                else:
-                    raise Exception, attr + ' must not be None'
-            else:
-                raise Exception, 'could not detirmine the existance of ' + attr + ' in args[0]'
-        return h
-    return dec
-
-def create_value_check_dec(attr, desired_value):
-    def dec(f, *args, **kwargs):
-        '''Assumes that an existance check has already been done'''
-        def h(*args, **kwargs):
-            attrs = dir(args[0])
-            if ('__dict__' in attrs):
-                if (args[0].__dict__[attr] != desired_value):  raise Exception, attr + ' must equal ' + desired_value
-                return f(*args, **kwargs)
-            else:
-                if args.__getattribute__(attr) != desired_value: raise Exception, attr + ' must equal ' + desired_value
-                return f(*args, **kwargs)
-        return h
-    return dec
-
 auth_msg_check = create_existance_check_dec('auth_msg')
 pub_key_check = create_existance_check_dec('pub_key')
 pri_key_check = create_existance_check_dec('pri_key')
 aes_key_check = create_existance_check_dec('aes_key')
+partner_secret_hash_check = create_existance_check_dec('partner_secret_hash')
 authenticated_exist_check = create_existance_check_dec('authenticated')
 authenticated_true_check = create_value_check_dec('authenticated', True)
 key_agreement_true_check = create_value_check_dec('key_agreement', True)
@@ -68,23 +36,27 @@ class CommunicationLink(object):
     def send(self, msg_type, msg, signature=None):
         if signature: d = {'type':msg_type, 'value':msg, 'signature':signature}
         else: d = {'type':msg_type, 'value':msg}
-        self.comm.send_dict(d)
+        try: self.comm.send_dict(d)
+        except: pass
     
     def begin_auth(self, extra_info=None):
         self.send('request_auth', extra_info)
     
+    @partner_secret_hash_check
     def request_auth(self):
         auth_msg = os.urandom(64)
         a = auth.create_auth(self.partner_secret_hash, auth_msg)
         self.send('sign_auth', a)
         self.auth_msg = auth_msg
         return ran_str
-        
+    
+    @partner_secret_hash_check
     def sign_auth(self, auth_msg):
         signed_a = auth.sign_auth(self.secret, self.salt, self.partner_secret_hash, auth_msg)
         self.send('verify_auth', signed_a)
     
     @auth_msg_check
+    @partner_secret_hash_check
     def verify_auth(self, new_auth_msg):
         vr = auth.verify_auth(self.secret, self.salt, self.auth_msg, new_auth_msg)
         self.send('verification_result', str(int(vr)))
@@ -94,14 +66,16 @@ class CommunicationLink(object):
     @pri_key_check
     @authenticated_exist_check
     @authenticated_true_check
+    @partner_secret_hash_check
     def request_pub_key(self):
         k = self.pri_key.publickey().__getstate__()
         msg = qcrypt.normalize(nDDB.encode(k))
-        signature = auth.sign_msg(self.users[self.cliInfo[cliNum]['login_name']]['pass_hash'], msg)
+        signature = auth.sign_msg(self.partner_secret_hash, msg)
         self.send('pub_key', msg, signature)
     
     @authenticated_exist_check
     @authenticated_true_check
+    @partner_secret_hash_check
     def set_pub_key(self, msg, signature):
         vr = auth.verify_signature(self.secret, self.salt, msg, signature)
         if vr:
@@ -116,6 +90,7 @@ class CommunicationLink(object):
     @authenticated_exist_check
     @authenticated_true_check
     @pub_key_check
+    @partner_secret_hash_check
     def send_new_aes_key(self):
         self.aes_key = qcrypt.normalize(qcrypt.create_aes_key())
         k = qcrypt.pub_encrypt(self.aes_key, self.pub_key)
@@ -127,6 +102,7 @@ class CommunicationLink(object):
     @pri_key_check
     @authenticated_exist_check
     @authenticated_true_check
+    @partner_secret_hash_check
     def set_aes_key(self, msg_e, signature):
         vr = auth.verify_signature(self.secret, self.salt, msg_e, signature)
         if vr:
@@ -146,6 +122,7 @@ class CommunicationLink(object):
     @pub_key_check
     @authenticated_exist_check
     @authenticated_true_check
+    @partner_secret_hash_check
     def confirm_aes_key_set(self, msg, signature):
         vr = auth.verify_signature(self.secret, self.salt, msg, signature)
         if vr:
@@ -162,6 +139,7 @@ class CommunicationLink(object):
     @key_agreement_true_check
     @authenticated_exist_check
     @authenticated_true_check
+    @partner_secret_hash_check
     def send_message(self, msg):
         msg_e = qcrypt.aes_encrypt(msg, self.aes_key)
         self.send('message', msg)
@@ -170,6 +148,7 @@ class CommunicationLink(object):
     @key_agreement_true_check
     @authenticated_exist_check
     @authenticated_true_check
+    @partner_secret_hash_check
     def recieved_message(self, msg):
         msg_d = qcrypt.aes_decrypt(msg, self.aes_key)
         return msg_d
