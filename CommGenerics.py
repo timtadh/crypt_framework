@@ -11,6 +11,7 @@ class CommGenericBase(object):
     def send(self, msg): pass
     def recieve(self): pass
     def send_dict(self, d): pass
+    def listen(self): pass
     def close(self): pass
     def set_proc_syscommand(self, proc_func):
         self.proc_syscommand = proc_func

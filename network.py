@@ -52,7 +52,8 @@ key_agreement_true_check = create_value_check_dec('key_agreement', True)
 
 class CommunicationLink(object):
     
-    def __init__(self, sock, secret, salt, partner_secret_hash):
+    def __init__(self, comm, secret, salt, partner_secret_hash):
+        self.comm = comm
         self.sock = sock
         self.secret = secret
         self.salt = salt
@@ -63,39 +64,30 @@ class CommunicationLink(object):
         self.authenticated = None
         self.aes_key = None
         self.key_agreement = False
-
-    def read_data(self):
-        data = ''
-        while data == '':
-            try:
-                while data[(-3-END_LEN):] != '>~>STOP': data += self.sock.recv(1024)
-            except:
-                data = ''
-                continue
-        data = data[:-1*END_LEN]
-        return data
     
-    def send_dict(self, msg_dict):
-        self.sock.sendall(nDDB.encode(msg_dict)+END_MARK)
+    def send(self, msg_type, msg, signature=None):
+        if signature: d = {'type':msg_type, 'value':msg, 'signature':signature}
+        else: d = {'type':msg_type, 'value':msg}
+        self.comm.send_dict(d)
     
     def begin_auth(self, extra_info=None):
-        self.send_dict({'type':'request_auth', 'value':extra_info})
+        self.send('request_auth', extra_info)
     
     def request_auth(self):
         auth_msg = os.urandom(64)
         a = auth.create_auth(self.partner_secret_hash, auth_msg)
-        self.send_dict({'type':'sign_auth', 'value':a})
+        self.send('sign_auth', a)
         self.auth_msg = auth_msg
         return ran_str
         
     def sign_auth(self, auth_msg):
         signed_a = auth.sign_auth(self.secret, self.salt, self.partner_secret_hash, auth_msg)
-        self.send_dict({'type':'verify_auth', 'value':signed_a})
+        self.send('verify_auth', signed_a)
     
     @auth_msg_check
     def verify_auth(self, new_auth_msg):
         vr = auth.verify_auth(self.secret, self.salt, self.auth_msg, new_auth_msg)
-        self.send_dict({'type':'verification_result', 'value':str(int(vr))})
+        self.send('verification_result', str(int(vr)))
         self.authenticated = vr
         return vr
         
@@ -106,7 +98,7 @@ class CommunicationLink(object):
         k = self.pri_key.publickey().__getstate__()
         msg = qcrypt.normalize(nDDB.encode(k))
         signature = auth.sign_msg(self.users[self.cliInfo[cliNum]['login_name']]['pass_hash'], msg)
-        self.send_dict({'type':'key', 'value':msg, 'signature':signature})
+        self.send('pub_key', msg, signature)
     
     @authenticated_exist_check
     @authenticated_true_check
@@ -128,7 +120,7 @@ class CommunicationLink(object):
         self.aes_key = qcrypt.normalize(qcrypt.create_aes_key())
         k = qcrypt.pub_encrypt(self.aes_key, self.pub_key)
         signature = auth.sign_msg(self.partner_secret_hash, k)
-        send_dict({'type':'setaeskey', 'value':k, 'signature':signature})
+        self.send('setaeskey', k, signature)
         self.key_agreement = False
         return self.aes_key
     
@@ -142,7 +134,7 @@ class CommunicationLink(object):
             self.key_agreement = True
             msg = qcrypt.aes_encrypt(AES_SET_MSG, self.aes_key)
             signature = auth.sign_msg(self.partner_secret_hash, msg)
-            send_dict({'type':'confirm_aeskey', 'value':msg, 'signature':signature})
+            self.send('confirm_aeskey', msg, signature)
         else:
             k = None
             self.key_agreement = False
@@ -165,3 +157,19 @@ class CommunicationLink(object):
         else:
             self.key_agreement = False
             print 'incorrect message signature'
+            
+    @aes_key_check
+    @key_agreement_true_check
+    @authenticated_exist_check
+    @authenticated_true_check
+    def send_message(self, msg):
+        msg_e = qcrypt.aes_encrypt(msg, self.aes_key)
+        self.send('message', msg)
+    
+    @aes_key_check
+    @key_agreement_true_check
+    @authenticated_exist_check
+    @authenticated_true_check
+    def recieved_message(self, msg):
+        msg_d = qcrypt.aes_decrypt(msg, self.aes_key)
+        return msg_d
