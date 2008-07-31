@@ -5,6 +5,8 @@ import sys, re, os, nDDB, qcrypt, keyfile
 import authenticator as auth
 from Crypto.PublicKey import RSA
 from Crypto.Hash import SHA256
+from CommGenerics import SocketGeneric
+from network import CommunicationLink
 
 END_MARK = 'STOP'
 END_LEN = 4
@@ -48,8 +50,11 @@ class Gui:
 
     def exit(self):
         network.deactivateClient()
-        gui.root.destroy()
-        self.root.quit()
+        try:
+            gui.root.destroy()
+            self.root.quit()
+        except:
+            pass
 
 class tcpClient:
 
@@ -74,6 +79,23 @@ class tcpClient:
         
         self.password = raw_input('password: ')
         
+        
+        self.sockg = SocketGeneric(host, port, bufsize)
+        self.link = CommunicationLink(self.sockg, self.password, self.user['salt'], self.server_secret_hash)
+        
+        def syscommands(data):
+            try: d = nDDB.decode(data)
+            except: return
+            
+            if (not (d.has_key('type') or d.has_key('value'))): return 
+            
+            command = d['type']
+            msg = d['value']
+            
+            if command == 'stop': self.sockg.close()
+        
+        self.sockg.set_proc_syscommand(syscommands)
+        
         #----------------DEBUG----------------#
         # self.pass_hash = self.user['pass_hash']
         # if self.pass_hash != auth.saltedhash_hex(self.password, self.user['salt']): 
@@ -85,168 +107,90 @@ class tcpClient:
         self.server_key = None
 
     def connect(self):
-        self.tcpCliSock = socket(AF_INET, SOCK_STREAM)
-        self.tcpCliSock.connect(self.ADDR)
+        self.sockg.connect()
 
     def send(self, data):
         if not data: return
-        msg = qcrypt.aes_encrypt(data, self.aeskey)
-        #signature = auth.sign_msg(self.server_secret_hash, msg)
-        signature = 0
-        self.send_dict(self.tcpCliSock, {'type':'message', 'value':msg, 'signature':signature})
-        #printer.printInfo(data)
+        self.link.send_message(data)
 
     def stopListening(self):
         self.stop = True
-        self.send_dict(self.tcpCliSock, {'type':'stop', 'value':None})
+        self.sockg.send_dict({'type':'stop', 'value':None})
         
     def disconnect(self):
-        self.tcpCliSock.close()
+        self.sockg.close()
 
     def deactivateClient(self):
         self.stopListening()
         self.disconnect()
     
-    def read_data(self, sock):
-        data = ''
-        while data == '':
-            try:
-                while data[(-3-END_LEN):] != '>~>STOP': data += sock.recv(1024)
-            except:
-                data = ''
-                continue
-        data = data[:-1*END_LEN]
-        return data
-    
-    def send_dict(self, sock, msg_dict):
-        sock.sendall(nDDB.encode(msg_dict)+END_MARK)
-    
     def listen(self, lock=False, stuff=False):
         print 'listening'
-        while 1:
-            data = self.read_data(self.tcpCliSock)
-            print '\n--------'
-            print data
+        while not self.sockg.closed and self.link.authenticated and self.link.key_agreement:
+            cmd, msg, sig = self.unpack_data(self.sockg.recieve())
             
-            if not data: break
-            if self.stop: break
-            
-            d = nDDB.decode(data)
-            
-            print d
             try:
-                if d and d.has_key('type') and d.has_key('value') and d.has_key('signature'):
-                    if d['type'] == 'message':
-                        signature = d['signature']
-                        msg_e = d['value']
-                        print msg_e
-                        #vr = auth.verify_signature(self.password, self.user['salt'], msg_e, signature)
-                        msg = qcrypt.aes_decrypt(msg_e, self.aeskey)
-                        print msg
-                        self.printer.printInfo(msg)
-                    elif d['type'] == 'stop':
-                        break
-            except:
+                if cmd == 'message':
+                    msg = self.link.recieved_message(msg)
+                    self.printer.printInfo(msg)
+            except Exception, e:
+                print e
                 continue
-            print '--------\n'
-        self.disconnect()
+        #self.disconnect()
         if lock: lock.release()
-
+        try:
+            gui.root.destroy()
+            gui.root.quit()
+            sys.exit()
+        except: pass
+    
+    def unpack_data(self, data):
+        d = nDDB.decode(data)
+        if (not (d.has_key('type') or d.has_key('value'))): return None, None, None
+        if d.has_key('signature'): return d['type'], d['value'], d['signature']
+        return d['type'], d['value'], None
+    
     def activateClient(self):
         self.connect()
         
-        a = None
-        self.send_dict(self.tcpCliSock, {'type':'request_auth', 'value':self.user['login_name']})
-        while not a:
-            data = self.read_data(self.tcpCliSock)
-            
-            d = nDDB.decode(data)
-            
-            if d and d.has_key('type') and d.has_key('value') and d['type'] == 'sign_auth':
-                a = d['value']
-                signed_a = auth.sign_auth(self.password, self.user['salt'], self.server_secret_hash, a)
-                d = {'type':'verify_auth', 'value':{'signed_a':signed_a, 'login_name':self.user['login_name']}}
-                self.send_dict(self.tcpCliSock, d)
-            else:
-                self.send_dict(self.tcpCliSock, {'type':'request_auth', 'value':None})
-        
-        data = self.read_data(self.tcpCliSock)
-        
-        d = nDDB.decode(data)
-        
-        if d and d.has_key('type') and d.has_key('value') and d['type'] == 'verification_result':
-            print 'asdfaef weawef awef '
-            try:
-                vr = bool(int(d['value']))
-                if not vr: 
-                    print 'verification failed'
-                    sys.exit()
-                print 'server verified client'
-            except:
-                print 'verification failed'
+        while not (self.sockg.closed or self.link.authenticated):
+            self.link.begin_auth(self.user['login_name'])
+            cmd, msg, sig = self.unpack_data(self.sockg.recieve())
+            if cmd != 'sign_auth': continue
+            self.link.sign_auth(msg)
+            cmd, msg, sig = self.unpack_data(self.sockg.recieve())
+            if cmd != 'verification_result': continue
+            msg = qcrypt.denormalize(msg)
+            msg_vr = auth.verify_signature(self.link.secret, self.link.salt, msg, sig)
+            vr = bool(int(msg[0]))
+            if not msg_vr: continue
+            if vr: print 'server verified client'
+            else: 
+                cli_sockg.close()
                 sys.exit()
-        else:
-            print 'wtf'
-            sys.exit()
-        
-        ran_str = os.urandom(64)
-        a = auth.create_auth(self.server_secret_hash, ran_str)
-        self.send_dict(self.tcpCliSock, {'type':'sign_auth', 'value':a})
-        
-        data = self.read_data(self.tcpCliSock)
-        
-        d = nDDB.decode(data)
-        
-        if d and d.has_key('type') and d.has_key('value') and d['type'] == 'verify_auth':
-            print 'about to verify'
-            signed_a = d['value']
-            vr = auth.verify_auth(self.password, self.user['salt'], ran_str, signed_a)
-            self.send_dict(self.tcpCliSock, {'type':'verification_result', 'value':str(int(vr))})
-            if not vr: 
-                print 'verification failed'
+            
+            self.link.request_auth()
+            cmd, msg, sig = self.unpack_data(self.sockg.recieve())
+            if cmd != 'verify_auth': continue
+            vr = self.link.verify_auth(msg)
+            if not vr:
+                cli_sockg.close()
                 sys.exit()
-            print 'server verified'
+            print 'client verified server'
         
-        # data = ''
-        # while data != 'pubkeyset':
-            # k = self.pubkey.publickey().__getstate__()
-            # k = qcrypt.normalize(nDDB.encode(k))
-            # signature = auth.sign_msg(self.server_secret_hash, k)
-            # self.send_dict(self.tcpCliSock, {'type':'setpubkey', 'value':k, 'signature':signature})
-            # data = self.tcpCliSock.recv(4096)
+        while not self.sockg.closed and self.link.authenticated and not self.link.pub_key:
+            self.sockg.send_dict({'type':'request_pub_key', 'value':None})
+            cmd, msg, sig = self.unpack_data(self.sockg.recieve())
+            if cmd != 'set_pub_key': continue
+            self.link.set_pub_key(msg, sig)
         
-        k = None
-        while k is None:
-            self.send_dict(self.tcpCliSock, {'type':'getkey', 'value':0})
-            data = self.read_data(self.tcpCliSock)
-            d = nDDB.decode(data)
-            print d
-            if d and d.has_key('type') and d.has_key('value') and d['type'] == 'key':
-                try:
-                    print 'trying to verify message'
-                    signature = d['signature']
-                    k_dict = d['value']
-                    vr = auth.verify_signature(self.password, self.user['salt'], k_dict, signature)
-                    print 'verified: ', vr
-                    if vr:
-                        k_dict = nDDB.decode(qcrypt.denormalize(d['value']))
-                        k = RSA.generate(1, os.urandom)
-                        k.__setstate__(keyfile.proc_key_dict(k_dict))
-                    else:
-                        print 'incorrect message signature'
-                        k = None
-                except:
-                    k = None
-        
-        self.server_key = k
-        print k.__getstate__()
-        
-        data = ''
-        while data != 'aeskeyset':
-            k = qcrypt.pub_encrypt(self.aeskey, self.server_key)
-            signature = auth.sign_msg(self.server_secret_hash, k)
-            self.send_dict(self.tcpCliSock, {'type':'setaeskey', 'value':k, 'signature':signature})
-            data = self.tcpCliSock.recv(4096)
+        if not self.link.authenticated and not self.link.pub_key: return
+            
+        while not self.sockg.closed and self.link.key_agreement == False:
+            self.link.send_new_aes_key()
+            cmd, msg, sig = self.unpack_data(self.sockg.recieve())
+            if cmd != 'confirm_aeskey': continue
+            self.link.confirm_aes_key_set(msg, sig)
         
         lock = thread.allocate_lock()
         lock.acquire()

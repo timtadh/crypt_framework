@@ -44,17 +44,17 @@ def aes_encrypt(plaintext, key):
     
 def aes_decrypt(ciphertext, key):
     try:
-        print 'aes_decrypt try'
+        #print 'aes_decrypt try'
         spaces_added = -1*int(ciphertext[-2:])
     except:
-        print 'aes_decrypt except'
+        #print 'aes_decrypt except'
         spaces_added = 0
     finally:
-        print 'aes_decrypt finally'
+        #print 'aes_decrypt finally'
         ciphertext = denormalize(ciphertext[:-2])
     aes = AES.new(key, AES.MODE_CBC)
     plaintext =  aes.decrypt(ciphertext)
-    print plaintext
+    #print plaintext
     if spaces_added: plaintext = plaintext[:spaces_added]
     return plaintext
     

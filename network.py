@@ -2,7 +2,7 @@
 
 from Crypto.PublicKey import RSA
 import authenticator as auth
-import qcrypt, os, keyfile
+import qcrypt, os, keyfile, nDDB, sys
 from dec_factories import create_existance_check_dec, create_value_check_dec
 
 END_MARK = 'STOP'
@@ -22,7 +22,6 @@ class CommunicationLink(object):
     
     def __init__(self, comm, secret, salt, partner_secret_hash):
         self.comm = comm
-        self.sock = sock
         self.secret = secret
         self.salt = salt
         self.partner_secret_hash = partner_secret_hash
@@ -37,7 +36,8 @@ class CommunicationLink(object):
         if signature: d = {'type':msg_type, 'value':msg, 'signature':signature}
         else: d = {'type':msg_type, 'value':msg}
         try: self.comm.send_dict(d)
-        except: pass
+        except Exception, e: 
+            print e
     
     def begin_auth(self, extra_info=None):
         self.send('request_auth', extra_info)
@@ -48,7 +48,7 @@ class CommunicationLink(object):
         a = auth.create_auth(self.partner_secret_hash, auth_msg)
         self.send('sign_auth', a)
         self.auth_msg = auth_msg
-        return ran_str
+        return auth_msg
     
     @partner_secret_hash_check
     def sign_auth(self, auth_msg):
@@ -59,7 +59,10 @@ class CommunicationLink(object):
     @partner_secret_hash_check
     def verify_auth(self, new_auth_msg):
         vr = auth.verify_auth(self.secret, self.salt, self.auth_msg, new_auth_msg)
-        self.send('verification_result', str(int(vr)))
+        msg = str(int(vr))+os.urandom(7)
+        sig = auth.sign_msg(self.partner_secret_hash, msg)
+        msg = qcrypt.normalize(msg)
+        self.send('verification_result', msg, sig)
         self.authenticated = vr
         return vr
         
@@ -71,7 +74,7 @@ class CommunicationLink(object):
         k = self.pri_key.publickey().__getstate__()
         msg = qcrypt.normalize(nDDB.encode(k))
         signature = auth.sign_msg(self.partner_secret_hash, msg)
-        self.send('pub_key', msg, signature)
+        self.send('set_pub_key', msg, signature)
     
     @authenticated_exist_check
     @authenticated_true_check
@@ -92,10 +95,10 @@ class CommunicationLink(object):
     @pub_key_check
     @partner_secret_hash_check
     def send_new_aes_key(self):
-        self.aes_key = qcrypt.normalize(qcrypt.create_aes_key())
+        self.aes_key = qcrypt.create_aes_key()
         k = qcrypt.pub_encrypt(self.aes_key, self.pub_key)
         signature = auth.sign_msg(self.partner_secret_hash, k)
-        self.send('setaeskey', k, signature)
+        self.send('set_aes_key', k, signature)
         self.key_agreement = False
         return self.aes_key
     
@@ -107,12 +110,14 @@ class CommunicationLink(object):
         vr = auth.verify_signature(self.secret, self.salt, msg_e, signature)
         if vr:
             k = qcrypt.pub_decrypt(msg_e, self.pri_key)
+            self.aes_key = k
             self.key_agreement = True
             msg = qcrypt.aes_encrypt(AES_SET_MSG, self.aes_key)
             signature = auth.sign_msg(self.partner_secret_hash, msg)
             self.send('confirm_aeskey', msg, signature)
         else:
             k = None
+            self.send('bad_aeskey', None)
             self.key_agreement = False
             print 'incorrect message signature'
         self.aes_key = k
@@ -134,6 +139,7 @@ class CommunicationLink(object):
         else:
             self.key_agreement = False
             print 'incorrect message signature'
+        return self.key_agreement
             
     @aes_key_check
     @key_agreement_true_check
@@ -141,7 +147,7 @@ class CommunicationLink(object):
     @authenticated_true_check
     @partner_secret_hash_check
     def send_message(self, msg):
-        msg_e = qcrypt.aes_encrypt(msg, self.aes_key)
+        msg = qcrypt.aes_encrypt(msg, self.aes_key)
         self.send('message', msg)
     
     @aes_key_check

@@ -1,12 +1,13 @@
 #communications generics for the CommunicationLink Class
 
-import socket, nDDB
+import nDDB
+from socket import *
 from dec_factories import create_existance_check_dec, create_value_check_dec
 
 class CommGenericBase(object):
     
     def __init__(self):
-        def defualt_proc(): pass
+        def defualt_proc(data): pass
         self.proc_syscommand = defualt_proc
     def connect(self): pass
     def send(self, msg): pass
@@ -26,7 +27,7 @@ class SocketGeneric(CommGenericBase):
     
     def __init__(self, host, port, bufsize=1024):
         super(SocketGeneric, self).__init__()
-        def defualt_proc(): pass
+        def defualt_proc(data): pass
         self.proc_command = defualt_proc
         self.sock = None
         self.HOST = host
@@ -41,18 +42,23 @@ class SocketGeneric(CommGenericBase):
     
     @closed_false_check
     def send(self, msg):
-        self.sock.sendall(msg+END_MARK)
+        self.sock.sendall(msg+self.END_MARK)
     
     def send_dict(self, d): 
-        self.send(nDDB.encode(msg_dict))
+        self.send(nDDB.encode(d))
     
     @closed_false_check
     def recieve(self): 
         data = ''
-        while data == '':
+        while not self.closed and data == '':
             try:
-                while data[(-1*self.END_LEN):] != self.END_MARK: data += self.sock.recv(self.BUFFSIZE)
-            except:
+                while not self.closed and data[(-1*self.END_LEN):] != self.END_MARK: 
+                    data += self.sock.recv(self.BUFSIZE)
+            except Exception, e:
+                if len(e.args) == 2 and e.args[0] in [10053, 10054]:
+                    self.closed = True
+                    break
+                print e, e.args, e.message, e.__class__, e.__dict__, e.__doc__
                 data = ''
                 continue
         data = data[:-1*self.END_LEN]
