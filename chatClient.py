@@ -6,8 +6,9 @@ import authenticator as auth
 from Crypto.PublicKey import RSA
 from Crypto.Hash import SHA256
 from CommGenerics import SocketGeneric
-from network import CommunicationLink
+from CommunicationLink import PillowTalkLink
 from ClientGeneric import ClientGeneric
+from ClientActivationScripts import PillowTalkActivator
 
 END_MARK = 'STOP'
 END_LEN = 4
@@ -50,7 +51,7 @@ class Gui:
         self.enterText.delete(0, END)
 
     def exit(self):
-        network.deactivateClient()
+        tcpclient.deactivateClient()
         try:
             gui.root.destroy()
             self.root.quit()
@@ -73,7 +74,9 @@ class tcpClient(ClientGeneric):
         
         commGeneric = SocketGeneric(host, port, bufsize)
         
-        super(tcpClient, self).__init__(commGeneric, self.password, self.keyfile, self.printer.printInfo)
+        super(tcpClient, self).__init__(commGeneric, self.password, self.keyfile,\
+                                        PillowTalkLink, PillowTalkActivator, self.printer.printInfo)
+        self.link.secret = self.password
         
         def customExit():
             try:
@@ -84,8 +87,8 @@ class tcpClient(ClientGeneric):
         self.exit = customExit
 
 printer = output()
-network = tcpClient(printer, 'localhost')
-network.activateClient()
+tcpclient = tcpClient(printer, 'localhost')
+tcpclient.activateClient()
 master = Tk()
 gui = Gui(master, printer)
 

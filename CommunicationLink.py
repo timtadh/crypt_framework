@@ -9,6 +9,11 @@ END_MARK = 'STOP'
 END_LEN = 4
 AES_SET_MSG = 'AES Key Set'
 
+class CommunicationLink(object):
+    def __init__(self, comm): pass
+    def send(self, msg): pass
+    def recieve(self): pass
+
 auth_msg_check = create_existance_check_dec('auth_msg')
 pub_key_check = create_existance_check_dec('pub_key')
 pri_key_check = create_existance_check_dec('pri_key')
@@ -18,16 +23,40 @@ authenticated_exist_check = create_existance_check_dec('authenticated')
 authenticated_true_check = create_value_check_dec('authenticated', True)
 key_agreement_true_check = create_value_check_dec('key_agreement', True)
 
-class CommunicationLink(object):
+class PillowTalkLink(CommunicationLink):
     
-    def __init__(self, comm, secret, salt, partner_secret_hash):
+    def __init__(self, comm, keyfile):
         self.comm = comm
-        self.secret = secret
-        self.salt = salt
-        self.partner_secret_hash = partner_secret_hash
-        self.auth_msg = None
+        self.keyfile = keyfile
+        
+        if keyfile.has_key('user'):
+            if keyfile['user'].has_key('secret'): self.secret = keyfile['user']['secret']
+            else: self.secret = None
+            if keyfile['user'].has_key('salt'): 
+                self.salt = keyfile['user']['salt']
+                print 'asdfasdf'
+            else: self.salt = None
+        else:
+            if keyfile.has_key('secret'): self.secret = keyfile['secret']
+            else: self.secret = None
+            if keyfile.has_key('salt'): self.salt = keyfile['salt']
+            else: self.salt = None
+        if keyfile.has_key('server_secret_hash'): self.partner_secret_hash = keyfile['server_secret_hash']
+        else: self.partner_secret_hash = None
+        
+        if keyfile.has_key('key'): 
+            self.pri_key = RSA.generate(1, os.urandom)
+            self.pri_key.__setstate__(self.keyfile['key'])
+        else: self.pri_key = None
+        
+        print 'secret', self.secret
+        print 'salt', self.salt
+        print 'psh', self.partner_secret_hash
+        if self.secret != None: print 'hash', auth.saltedhash_hex(self.secret, self.salt)
+        
+        self.name = None
         self.pub_key = None
-        self.pri_key = None
+        self.auth_msg = None
         self.authenticated = None
         self.aes_key = None
         self.key_agreement = False
@@ -38,6 +67,13 @@ class CommunicationLink(object):
         try: self.comm.send_dict(d)
         except Exception, e: 
             print e
+    
+    def recieve(self):
+        data = self.comm.recieve()
+        d = nDDB.decode(data)
+        if (not (d.has_key('type') or d.has_key('value'))): return None, None, None
+        if d.has_key('signature'): return d['type'], d['value'], d['signature']
+        return d['type'], d['value'], None
     
     def begin_auth(self, extra_info=None):
         self.send('request_auth', extra_info)

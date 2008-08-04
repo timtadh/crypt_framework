@@ -23,7 +23,7 @@ class tcpClient:
         
         
         self.sockg = SocketGeneric(host, port, bufsize)
-        self.link = CommunicationLink(self.sockg, self.password, self.user['salt'], self.server_secret_hash)
+        self.link = PillowTalkLink(self.sockg, self.password, self.user['salt'], self.server_secret_hash)
         
         def syscommands(data):
             try: d = nDDB.decode(data)

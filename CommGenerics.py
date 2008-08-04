@@ -1,4 +1,4 @@
-#communications generics for the CommunicationLink Class
+#communications generics for the PillowTalkLink Class
 
 import nDDB
 from socket import *
@@ -64,11 +64,11 @@ class SocketGeneric(CommGenericBase):
     @closed_false_check
     @listening_false_check
     @connected_true_check
-    def recieve(self): 
+    def recieve(self):
         data = ''
         while not self.closed and data == '':
             try:
-                while not self.closed and data[(-1*self.END_LEN):] != self.END_MARK: 
+                while not self.closed and data[(-1*self.END_LEN):] != self.END_MARK:
                     data += self.sock.recv(self.BUFSIZE)
             except Exception, e:
                 if len(e.args) == 2 and e.args[0] in [10053, 10054]:
@@ -78,6 +78,7 @@ class SocketGeneric(CommGenericBase):
                 data = ''
                 continue
         data = data[:-1*self.END_LEN]
+        print data
         self.proc_syscommand(data)
         self.proc_command(data)
         return data

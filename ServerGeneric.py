@@ -6,31 +6,26 @@ from Crypto.Cipher import AES
 from Crypto.PublicKey import RSA
 from Crypto.Hash import SHA256
 from CommGenerics import SocketGeneric
-from network import CommunicationLink
 
 class GenericServer_Listener(object):
     
-    def __init__(self, commGeneric, keyfile, client_handler):
+    def __init__(self, commGeneric, keyfile, comm_link_class, client_handler_class, cmd_processor_class):
         self.commGeneric = commGeneric
         self.keyfile = keyfile
-        self.secret = qcrypt.denormalize(self.keyfile['secret'])
-        self.salt = self.keyfile['salt']
-        self.pri_key = RSA.generate(1, os.urandom)
-        self.pri_key.__setstate__(self.keyfile['key'])
-        self.users = self.keyfile['users']
-        self.client_handler = client_handler
+        self.client_handler_class = client_handler_class
+        self.cmd_processor_class = cmd_processor_class
+        self.comm_link_class = comm_link_class
         self.clients = {}
     
     def start_listening(self):
         self.commGeneric.listen()
         
-        handler = self.client_handler(self)
+        handler = self.client_handler_class(self, self.cmd_processor_class)
         
         print 'waiting for connections...'
         while 1:
             socket_generic = self.commGeneric.accept()
-            comm_link = CommunicationLink(socket_generic, self.secret, self.salt, None)
-            comm_link.pri_key = self.pri_key
+            comm_link = self.comm_link_class(socket_generic, self.keyfile)
             
             uid = self.get_uid()
             self.clients.update({uid:comm_link})
@@ -50,14 +45,17 @@ class GenericServer_Listener(object):
 
 class GenericServer_ClientHandler(object):
     
-    def __init__(self, server_listener):
+    def __init__(self, server_listener, cmd_processor_class):
         self.server_listener = server_listener
         self.active_clients = []
+        self.cmd_processor_class = cmd_processor_class
+        print cmd_processor_class
     
     def handle(self, uid, comm_link, lock):
         print uid
         self.active_clients.append(uid)
         comm_generic = comm_link.comm
+        cmd_proc = self.cmd_processor_class(uid, comm_link, self.server_listener, self)
         
         def syscommands(data):
             try: d = nDDB.decode(data)
@@ -73,13 +71,14 @@ class GenericServer_ClientHandler(object):
                 comm_generic.close()
                 return
             
-            self.exec_command(uid, command, msg, sig)
+            cmd_proc.exec_command(command, msg, sig)
         
         comm_generic.set_proc_syscommand(syscommands)
         
+        print 'about to listen'
         while not comm_generic.closed:
             try:
-                data = comm_generic.recieve()
+                cmd, msg, sig = comm_link.recieve()
             except Exception, e:
                 print e
         
@@ -90,67 +89,11 @@ class GenericServer_ClientHandler(object):
         
         print 'disconnected from: ', comm_generic.ADDR
         lock.release()
-    
-    def _send(self, mesg, fromCli):
-        name = self.server_listener.get_client(fromCli).name
-        u = self.server_listener.users[name]
-        n = u['l_name'] + ', ' + u['f_name']
-        msg = n+': '+mesg
-        for x in self.active_clients:
-            try:
-                link = self.server_listener.get_client(x)
-                link.send_message(msg)
-            except:
-                pass
-            
-    def exec_command(self, uid, cmd, msg, sig=None):
-        link = self.server_listener.get_client(uid)
-        comm_generic = link.comm
-        
-        def message(msg):
-            m = link.recieved_message(msg)
-            self._send(m, uid)
-            
-        def request_auth(msg): 
-            link.name = msg
-            link.partner_secret_hash = self.server_listener.users[link.name]['pass_hash']
-            link.request_auth()
-            
-        def sign_auth(msg): link.sign_auth(msg)
-        def verify_auth(msg): 
-            if link.verify_auth(msg): print 'server verified client'
-        
-        def verification_result(msg, sig):
-            msg = qcrypt.denormalize(msg)
-            msg_vr = auth.verify_signature(link.secret, link.salt, msg, sig)
-            vr = bool(int(msg[0]))
-            if not msg_vr: return
-            if vr: print 'client verified server'
-            else: comm_generic.close()
-            
-        def request_pub_key(): link.request_pub_key()
-        def set_pub_key(msg, sig): link.set_pub_key(msg, sig)
-        def set_aes_key(msg, sig): link.set_aes_key(msg, sig)
-        
-        if not locals().has_key(cmd): return
-        cmd = locals()[cmd]
-        
-        try:
-            if 'sig' in cmd.func_code.co_varnames and 'msg' in cmd.func_code.co_varnames: cmd(msg, sig)
-            elif 'msg' in cmd.func_code.co_varnames: cmd(msg)
-            else: cmd()
-        except Exception, e:
-            print '-----------ERROR-----------\n'
-            print 'error: ', e
-            print 'Error proccessing: ', cmd
-            print 'Message: ', msg
-            print 'Sig: ', sig
-            print '\n-----------ERROR-----------'
 
 class ServerGeneric(object):
     
-    def __init__(self, commGeneric, keyfile, listener, client_handler):
-        self.listener = listener(commGeneric, keyfile, client_handler)
+    def __init__(self, commGeneric, keyfile, comm_link_class, listener_class, client_handler_class, cmd_processor_class):
+        self.listener = listener_class(commGeneric, keyfile, comm_link_class, client_handler_class, cmd_processor_class)
         self.keyfile = keyfile
         
     def startServer(self): self.listener.start_listening()
