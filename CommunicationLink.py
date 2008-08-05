@@ -30,14 +30,14 @@ class PillowTalkLink(CommunicationLink):
         self.keyfile = keyfile
         
         if keyfile.has_key('user'):
-            if keyfile['user'].has_key('secret'): self.secret = keyfile['user']['secret']
+            if keyfile['user'].has_key('secret'): self.secret = qcrypt.denormalize(keyfile['user']['secret'])
             else: self.secret = None
             if keyfile['user'].has_key('salt'): 
                 self.salt = keyfile['user']['salt']
                 print 'asdfasdf'
             else: self.salt = None
         else:
-            if keyfile.has_key('secret'): self.secret = keyfile['secret']
+            if keyfile.has_key('secret'): self.secret = qcrypt.denormalize( keyfile['secret'])
             else: self.secret = None
             if keyfile.has_key('salt'): self.salt = keyfile['salt']
             else: self.salt = None
@@ -49,7 +49,8 @@ class PillowTalkLink(CommunicationLink):
             self.pri_key.__setstate__(self.keyfile['key'])
         else: self.pri_key = None
         
-        print 'secret', self.secret
+        if self.secret != None: print 'secret', qcrypt.normalize(self.secret)
+        else: print self.secret
         print 'salt', self.salt
         print 'psh', self.partner_secret_hash
         if self.secret != None: print 'hash', auth.saltedhash_hex(self.secret, self.salt)

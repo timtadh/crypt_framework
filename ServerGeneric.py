@@ -42,6 +42,11 @@ class GenericServer_Listener(object):
     def get_client(self, uid):
         if self.clients.has_key(uid): return self.clients[uid]
         else: return None
+    
+    def remove_client(self, uid):
+        if self.clients.has_key(uid) and self.clients[uid].comm.closed:
+            del self.clients[uid]
+        else: raise Exception, 'tried to delete a non-existant or in-use client link'
 
 class GenericServer_ClientHandler(object):
     
@@ -86,6 +91,8 @@ class GenericServer_ClientHandler(object):
             if item == uid:
                 del self.active_clients[i]
                 break
+        
+        self.server_listener.remove_client(uid)
         
         print 'disconnected from: ', comm_generic.ADDR
         lock.release()

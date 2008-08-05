@@ -9,14 +9,13 @@ from CommGenerics import SocketGeneric
 
 class ClientGeneric(object):
 
-    def __init__(self, commGeneric, password, keyfile, comm_link_class, activationScript, recieveFunc=None):
+    def __init__(self, commGeneric, keyfile, comm_link_class, activationScript, recieveFunc=None):
         self.stop = False
         self.activate = activationScript
         self.keyfile = keyfile
         
         self.commGeneric = commGeneric
         self.link = comm_link_class(self.commGeneric, self.keyfile)
-        self.link.secret = password
         
         def syscommands(data):
             try: d = nDDB.decode(data)

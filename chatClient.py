@@ -74,7 +74,7 @@ class tcpClient(ClientGeneric):
         
         commGeneric = SocketGeneric(host, port, bufsize)
         
-        super(tcpClient, self).__init__(commGeneric, self.password, self.keyfile,\
+        super(tcpClient, self).__init__(commGeneric, self.keyfile,\
                                         PillowTalkLink, PillowTalkActivator, self.printer.printInfo)
         self.link.secret = self.password
         

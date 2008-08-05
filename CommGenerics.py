@@ -78,7 +78,6 @@ class SocketGeneric(CommGenericBase):
                 data = ''
                 continue
         data = data[:-1*self.END_LEN]
-        print data
         self.proc_syscommand(data)
         self.proc_command(data)
         return data
