@@ -36,7 +36,7 @@ def PillowTalkActivator(client):
         print 'client verified server'
     
     while not client.commGeneric.closed and client.link.authenticated and not client.link.pub_key:
-        client.commGeneric.send_dict({'type':'request_pub_key', 'value':None})
+        client.link.send('request_pub_key', None)
         cmd, msg, sig = client.link.recieve()
         if cmd != 'set_pub_key': continue
         client.link.set_pub_key(msg, sig)

@@ -6,10 +6,12 @@ import authenticator as auth
 from Crypto.PublicKey import RSA
 from Crypto.Hash import SHA256
 from CommGenerics import SocketGeneric
+from CommandProcessors import ClientCommandProcessor
 
 class ClientGeneric(object):
 
-    def __init__(self, commGeneric, keyfile, comm_link_class, activationScript, recieveFunc=None):
+    def __init__(self, commGeneric, keyfile, comm_link_class, activationScript, \
+                 sys_processor_class=ClientCommandProcessor, usr_processor_class=ClientCommandProcessor):
         self.stop = False
         self.activate = activationScript
         self.keyfile = keyfile
@@ -17,22 +19,28 @@ class ClientGeneric(object):
         self.commGeneric = commGeneric
         self.link = comm_link_class(self.commGeneric, self.keyfile)
         
+        sys_proc = sys_processor_class(self.link, self)
+        usr_proc = usr_processor_class(self.link, self)
+        
         def syscommands(data):
-            try: d = nDDB.decode(data)
+            try: cmd, msg, sig = self.link.unpack_data(data)
             except: return
             
-            if (not (d.has_key('type') or d.has_key('value'))): return 
+            if cmd == 'stop': self.commGeneric.close()
             
-            command = d['type']
-            msg = d['value']
-            
-            if command == 'stop': self.commGeneric.close()
+            sys_proc.exec_command(cmd, msg, sig)
         
         self.commGeneric.set_proc_syscommand(syscommands)
         
-        def defualtPrint(data): print data
-        if recieveFunc == None: self.recieve = defualtPrint
-        else: self.recieve = recieveFunc
+        def commands(data):
+            try: cmd, msg, sig = self.link.unpack_data(data)
+            except Exception, e:
+                print e
+                return
+            
+            usr_proc.exec_command(cmd, msg, sig)
+        
+        self.commGeneric.set_proc_command(commands)
         
         self.exit = sys.exit
 
@@ -45,7 +53,7 @@ class ClientGeneric(object):
 
     def stopListening(self):
         self.stop = True
-        self.commGeneric.send_dict({'type':'stop', 'value':None})
+        self.link.send('stop', None)
         
     def disconnect(self):
         self.commGeneric.close()
@@ -58,14 +66,6 @@ class ClientGeneric(object):
         print 'listening'
         while not self.commGeneric.closed and self.link.authenticated and self.link.key_agreement:
             cmd, msg, sig = self.link.recieve()
-            
-            try:
-                if cmd == 'message':
-                    msg = self.link.recieved_message(msg)
-                    self.recieve(msg)
-            except Exception, e:
-                print e
-                continue
         #self.disconnect()
         if lock: lock.release()
         self.exit()

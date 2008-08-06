@@ -9,15 +9,17 @@ class CommGenericBase(object):
     def __init__(self):
         def defualt_proc(data): pass
         self.proc_syscommand = defualt_proc
+        self.proc_command = defualt_proc
     def connect(self): pass
     def send(self, msg): pass
     def recieve(self): pass
-    def send_dict(self, d): pass
     def listen(self): pass
     def accept(self): pass
     def close(self): pass
     def set_proc_syscommand(self, proc_func):
         self.proc_syscommand = proc_func
+    def set_proc_command(self, proc_func):
+        self.proc_command = proc_func
 
 closed_false_check = create_value_check_dec('closed', False)
 connected_true_check = create_value_check_dec('connected', True)
@@ -32,8 +34,6 @@ class SocketGeneric(CommGenericBase):
     
     def __init__(self, host, port, bufsize=1024):
         super(SocketGeneric, self).__init__()
-        def defualt_proc(data): pass
-        self.proc_command = defualt_proc
         self.sock = None
         self.HOST = host
         self.PORT = port
@@ -57,9 +57,6 @@ class SocketGeneric(CommGenericBase):
     @connected_true_check
     def send(self, msg):
         self.sock.sendall(msg+self.END_MARK)
-    
-    def send_dict(self, d): 
-        self.send(nDDB.encode(d))
     
     @closed_false_check
     @listening_false_check
@@ -105,6 +102,3 @@ class SocketGeneric(CommGenericBase):
         sock_generic.sock = sock
         sock_generic.connected = True
         return sock_generic
-    
-    def set_proc_command(self, proc_func):
-        self.proc_command = proc_func

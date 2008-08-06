@@ -9,6 +9,7 @@ from CommGenerics import SocketGeneric
 from CommunicationLink import PillowTalkLink
 from ClientGeneric import ClientGeneric
 from ClientActivationScripts import PillowTalkActivator
+from CommandProcessors import ClientCommandProcessor
 
 END_MARK = 'STOP'
 END_LEN = 4
@@ -72,10 +73,16 @@ class tcpClient(ClientGeneric):
         self.keyfile = keyfile.load_client_keyfile(raw_input('key file path: '))
         self.password = raw_input('password: ')
         
+        class ChatClientProcessor(ClientCommandProcessor):
+            def exec_command(self, cmd, msg, sig):
+                if cmd == 'message':
+                    msg = self.link.recieved_message(msg)
+                    printer.printInfo(msg)
+        
         commGeneric = SocketGeneric(host, port, bufsize)
         
-        super(tcpClient, self).__init__(commGeneric, self.keyfile,\
-                                        PillowTalkLink, PillowTalkActivator, self.printer.printInfo)
+        super(tcpClient, self).__init__(commGeneric, self.keyfile, PillowTalkLink, PillowTalkActivator, \
+                                        usr_processor_class=ChatClientProcessor)
         self.link.secret = self.password
         
         def customExit():

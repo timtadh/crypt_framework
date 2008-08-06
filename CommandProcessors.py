@@ -8,7 +8,11 @@ from Crypto.Hash import SHA256
 from CommGenerics import SocketGeneric
 from CommunicationLink import PillowTalkLink
 
-class ServerCommandProcessor(object):
+class CommandProcessor(object):
+    
+    def exec_command(self, cmd, msg, sig): pass
+
+class ServerCommandProcessor(CommandProcessor):
     
     def __init__(self, uid, comm_link, listener, client_handler):
         self.uid = uid
@@ -19,16 +23,20 @@ class ServerCommandProcessor(object):
     
     def exec_command(self, cmd, msg, sig): pass
 
+class ClientCommandProcessor(CommandProcessor):
+    
+    def __init__(self, comm_link, client_generic):
+        self.client_generic = client_generic
+        self.link = comm_link
+    
+    def exec_command(self, cmd, msg, sig): pass
+
 class PillowTalkProcessor(ServerCommandProcessor):
     
     def __init__(self, uid, comm_link, listener, client_handler):
         super(PillowTalkProcessor, self).__init__(uid, comm_link, listener, client_handler)
     
     def exec_command(self, cmd, msg, sig):
-        
-        def message(msg):
-            m = self.link.recieved_message(msg)
-            self._send(m, self.uid)
             
         def request_auth(msg): 
             self.link.name = msg
@@ -65,6 +73,32 @@ class PillowTalkProcessor(ServerCommandProcessor):
             print 'Message: ', msg
             print 'Sig: ', sig
             print '\n-----------ERROR-----------'
+
+class BroadcastMessageProcessor(ServerCommandProcessor):
+    
+    def __init__(self, uid, comm_link, listener, client_handler):
+        super(BroadcastMessageProcessor, self).__init__(uid, comm_link, listener, client_handler)
+    
+    def exec_command(self, cmd, msg, sig):
+        
+        def message(msg):
+            m = self.link.recieved_message(msg)
+            self._send(m, self.uid)
+        
+        if not locals().has_key(cmd): return
+        cmd = locals()[cmd]
+        
+        try:
+            if 'sig' in cmd.func_code.co_varnames and 'msg' in cmd.func_code.co_varnames: cmd(msg, sig)
+            elif 'msg' in cmd.func_code.co_varnames: cmd(msg)
+            else: cmd()
+        except Exception, e:
+            print '-----------ERROR-----------\n'
+            print 'error: ', e
+            print 'Error proccessing: ', cmd
+            print 'Message: ', msg
+            print 'Sig: ', sig
+            print '\n-----------ERROR-----------'
             
     def _send(self, mesg, fromCli):
         name = self.listener.get_client(fromCli).name
@@ -77,3 +111,4 @@ class PillowTalkProcessor(ServerCommandProcessor):
                 link.send_message(msg)
             except:
                 pass
+                

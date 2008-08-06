@@ -12,6 +12,7 @@ AES_SET_MSG = 'AES Key Set'
 class CommunicationLink(object):
     def __init__(self, comm): pass
     def send(self, msg): pass
+    def unpack_data(self, data): pass 
     def recieve(self): pass
 
 auth_msg_check = create_existance_check_dec('auth_msg')
@@ -32,9 +33,7 @@ class PillowTalkLink(CommunicationLink):
         if keyfile.has_key('user'):
             if keyfile['user'].has_key('secret'): self.secret = qcrypt.denormalize(keyfile['user']['secret'])
             else: self.secret = None
-            if keyfile['user'].has_key('salt'): 
-                self.salt = keyfile['user']['salt']
-                print 'asdfasdf'
+            if keyfile['user'].has_key('salt'): self.salt = keyfile['user']['salt']
             else: self.salt = None
         else:
             if keyfile.has_key('secret'): self.secret = qcrypt.denormalize( keyfile['secret'])
@@ -49,11 +48,11 @@ class PillowTalkLink(CommunicationLink):
             self.pri_key.__setstate__(self.keyfile['key'])
         else: self.pri_key = None
         
-        if self.secret != None: print 'secret', qcrypt.normalize(self.secret)
-        else: print self.secret
-        print 'salt', self.salt
-        print 'psh', self.partner_secret_hash
-        if self.secret != None: print 'hash', auth.saltedhash_hex(self.secret, self.salt)
+        # if self.secret != None: print 'secret', qcrypt.normalize(self.secret)
+        # else: print self.secret
+        # print 'salt', self.salt
+        # print 'psh', self.partner_secret_hash
+        # if self.secret != None: print 'hash', auth.saltedhash_hex(self.secret, self.salt)
         
         self.name = None
         self.pub_key = None
@@ -65,16 +64,19 @@ class PillowTalkLink(CommunicationLink):
     def send(self, msg_type, msg, signature=None):
         if signature: d = {'type':msg_type, 'value':msg, 'signature':signature}
         else: d = {'type':msg_type, 'value':msg}
-        try: self.comm.send_dict(d)
+        try: self.comm.send(nDDB.encode(d))
         except Exception, e: 
             print e
     
-    def recieve(self):
-        data = self.comm.recieve()
+    def unpack_data(self, data):
         d = nDDB.decode(data)
         if (not (d.has_key('type') or d.has_key('value'))): return None, None, None
         if d.has_key('signature'): return d['type'], d['value'], d['signature']
         return d['type'], d['value'], None
+    
+    def recieve(self):
+        data = self.comm.recieve()
+        return self.unpack_data(data)
     
     def begin_auth(self, extra_info=None):
         self.send('request_auth', extra_info)

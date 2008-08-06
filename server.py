@@ -8,7 +8,7 @@ from Crypto.Hash import SHA256
 from CommGenerics import SocketGeneric
 from CommunicationLink import PillowTalkLink
 from ServerGeneric import ServerGeneric, GenericServer_ClientHandler, GenericServer_Listener
-from ServerCommandProcessors import PillowTalkProcessor
+from CommandProcessors import PillowTalkProcessor, BroadcastMessageProcessor
 
 END_MARK = 'STOP'
 END_LEN = 4
@@ -36,8 +36,8 @@ class tcpServer(ServerGeneric):
         
         self.sock_generic = SocketGeneric(self.HOST, self.PORT, self.BUFSIZE)
         
-        super(tcpServer, self).__init__(self.sock_generic, self.keyfile, PillowTalkLink, \
-                                        GenericServer_Listener, GenericServer_ClientHandler, PillowTalkProcessor)
+        super(tcpServer, self).__init__(self.sock_generic, self.keyfile, PillowTalkLink, GenericServer_Listener, \
+                                        GenericServer_ClientHandler, PillowTalkProcessor, BroadcastMessageProcessor)
 
 server = tcpServer()
 server.startServer()

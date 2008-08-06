@@ -6,21 +6,24 @@ from Crypto.Cipher import AES
 from Crypto.PublicKey import RSA
 from Crypto.Hash import SHA256
 from CommGenerics import SocketGeneric
+from CommandProcessors import ServerCommandProcessor
 
 class GenericServer_Listener(object):
     
-    def __init__(self, commGeneric, keyfile, comm_link_class, client_handler_class, cmd_processor_class):
+    def __init__(self, commGeneric, keyfile, comm_link_class, client_handler_class, \
+                 sys_processor_class=ServerCommandProcessor, usr_processor_class=ServerCommandProcessor):
         self.commGeneric = commGeneric
         self.keyfile = keyfile
         self.client_handler_class = client_handler_class
-        self.cmd_processor_class = cmd_processor_class
+        self.sys_processor_class = sys_processor_class
         self.comm_link_class = comm_link_class
         self.clients = {}
+        self.usr_processor_class = usr_processor_class
     
     def start_listening(self):
         self.commGeneric.listen()
         
-        handler = self.client_handler_class(self, self.cmd_processor_class)
+        handler = self.client_handler_class(self, self.sys_processor_class, self.usr_processor_class)
         
         print 'waiting for connections...'
         while 1:
@@ -29,6 +32,8 @@ class GenericServer_Listener(object):
             
             uid = self.get_uid()
             self.clients.update({uid:comm_link})
+            
+            print "new connection to " + str(socket_generic.ADDR) + " with a uid of " + uid
             
             lock = thread.allocate_lock()
             lock.acquire()
@@ -50,35 +55,38 @@ class GenericServer_Listener(object):
 
 class GenericServer_ClientHandler(object):
     
-    def __init__(self, server_listener, cmd_processor_class):
+    def __init__(self, server_listener, sys_processor_class, usr_processor_class):
         self.server_listener = server_listener
         self.active_clients = []
-        self.cmd_processor_class = cmd_processor_class
-        print cmd_processor_class
+        self.sys_processor_class = sys_processor_class
+        self.usr_processor_class = usr_processor_class
+        print sys_processor_class
     
     def handle(self, uid, comm_link, lock):
-        print uid
         self.active_clients.append(uid)
         comm_generic = comm_link.comm
-        cmd_proc = self.cmd_processor_class(uid, comm_link, self.server_listener, self)
+        sys_proc = self.sys_processor_class(uid, comm_link, self.server_listener, self)
+        usr_proc = self.usr_processor_class(uid, comm_link, self.server_listener, self)
         
         def syscommands(data):
-            try: d = nDDB.decode(data)
+            try: cmd, msg, sig = comm_link.unpack_data(data)
             except: return
-            if (not (d.has_key('type') or d.has_key('value'))): return 
             
-            command = d['type']
-            msg = d['value']
-            if d.has_key('signature'): sig = d['signature']
-            else: sig = None
-            
-            if command == 'stop':  
+            if cmd == 'stop':  
                 comm_generic.close()
                 return
             
-            cmd_proc.exec_command(command, msg, sig)
+            sys_proc.exec_command(cmd, msg, sig)
         
         comm_generic.set_proc_syscommand(syscommands)
+        
+        def commands(data):
+            try: cmd, msg, sig = comm_link.unpack_data(data)
+            except: return
+            
+            usr_proc.exec_command(cmd, msg, sig)
+        
+        comm_generic.set_proc_command(commands)
         
         print 'about to listen'
         while not comm_generic.closed:
@@ -94,13 +102,15 @@ class GenericServer_ClientHandler(object):
         
         self.server_listener.remove_client(uid)
         
-        print 'disconnected from: ', comm_generic.ADDR
+        print 'disconnected from: ', comm_generic.ADDR, uid
         lock.release()
 
 class ServerGeneric(object):
     
-    def __init__(self, commGeneric, keyfile, comm_link_class, listener_class, client_handler_class, cmd_processor_class):
-        self.listener = listener_class(commGeneric, keyfile, comm_link_class, client_handler_class, cmd_processor_class)
+    def __init__(self, commGeneric, keyfile, comm_link_class, listener_class, \
+                 client_handler_class, sys_processor_class, usr_processor_class):
+        self.listener = listener_class(commGeneric, keyfile, comm_link_class, \
+                                       client_handler_class, sys_processor_class, usr_processor_class)
         self.keyfile = keyfile
         
     def startServer(self): self.listener.start_listening()
