@@ -9,7 +9,7 @@ from CommGenerics import SocketGeneric
 from CommunicationLink import PillowTalkLink
 from ClientGeneric import ClientGeneric
 from ClientActivationScripts import PillowTalkActivator
-from CommandProcessors import ClientCommandProcessor
+from CommandProcessors import ClientCommandProcessor, ChatClientProcessor
 
 END_MARK = 'STOP'
 END_LEN = 4
@@ -25,7 +25,7 @@ class output:
         self.tcp_client = tcp_client
         
     def printInfo(self, data):
-        self.gui.printText.insert(END, data+'\n')
+        self.gui.printText.insert(END, str(data)+'\n')
 
     def sendInfo(self, data):
         self.tcp_client.send(data)
@@ -40,17 +40,22 @@ class Gui:
         self.printText = Text(self.root)
         self.enterText = Entry(self.root)
         self.exit = Button(self.root, {'text':'Exit', 'command':self.exit})
+        self.get_usrlist = Button(self.root, {'text':'get user list', 'command':self.get_usrlist})
 
         self.printText.pack()
         self.enterText.pack()
         self.exit.pack(side=RIGHT)
+        self.get_usrlist.pack(side=RIGHT)
 
         self.enterText.bind('<Return>', self.inputText)
 
     def inputText(self, event):
         printer.sendInfo(self.enterText.get())
         self.enterText.delete(0, END)
-
+    
+    def get_usrlist(self):
+        self.printer.tcp_client.get_usrlist()
+    
     def exit(self):
         tcpclient.deactivateClient()
         try:
@@ -58,13 +63,6 @@ class Gui:
             self.root.quit()
         except:
             pass
-
-class ChatClientProcessor(ClientCommandProcessor):
-    def __init__(self, printer): self.printer = printer
-    def exec_command(self, cmd, msg, sig):
-        if cmd == 'message':
-            msg = self.link.recieved_message(msg)
-            self.printer.printInfo(msg)
 
 class tcpClient(ClientGeneric):
 
@@ -94,16 +92,20 @@ class tcpClient(ClientGeneric):
             except: pass
         self.exit = customExit
     
+    def get_usrlist(self):
+        self.link.send_message(self.link.format_msg('get_usrlist', None))
+    
     def send(self, data):
         m = self.link.format_msg('send_to_all', data)
         super(tcpClient, self).send(m)
 
-printer = output()
-tcpclient = tcpClient(printer, 'localhost')
-tcpclient.activateClient()
-master = Tk()
-gui = Gui(master, printer)
-
-master.mainloop()
+if __name__ == '__main__':
+    printer = output()
+    tcpclient = tcpClient(printer, 'localhost')
+    tcpclient.activateClient()
+    master = Tk()
+    gui = Gui(master, printer)
+    
+    master.mainloop()
 
 

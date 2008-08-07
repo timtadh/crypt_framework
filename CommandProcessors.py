@@ -11,13 +11,11 @@ from dec_factories import create_existance_check_dec, create_value_check_dec
 
 class CommandProcessor(object):
     
-    def init(self): pass
-    
     def exec_command(self, cmd, msg, sig): pass
 
 class ServerCommandProcessor(CommandProcessor):
     
-    def init(self, uid, comm_link, listener, client_handler):
+    def __init__(self, uid, comm_link, listener, client_handler):
         self.uid = uid
         self.link = comm_link
         self.listener = listener
@@ -29,15 +27,15 @@ class ServerCommandProcessor(CommandProcessor):
 class ClientCommandProcessor(CommandProcessor):
     
     def init(self, comm_link, client_generic):
-        self.client_generic = client_generic
+        self.client = client_generic
         self.link = comm_link
     
     def exec_command(self, cmd, msg, sig): pass
 
 class PillowTalkProcessor(ServerCommandProcessor):
     
-    def init(self, uid, comm_link, listener, client_handler):
-        super(PillowTalkProcessor, self).init(uid, comm_link, listener, client_handler)
+    def __init__(self, uid, comm_link, listener, client_handler):
+        super(PillowTalkProcessor, self).__init__(uid, comm_link, listener, client_handler)
     
     def exec_command(self, cmd, msg, sig):
         #print cmd, msg, sig
@@ -79,8 +77,8 @@ class PillowTalkProcessor(ServerCommandProcessor):
 
 class BroadcastMessageProcessor(ServerCommandProcessor):
     
-    def init(self, uid, comm_link, listener, client_handler):
-        super(BroadcastMessageProcessor, self).init(uid, comm_link, listener, client_handler)
+    def __init__(self, uid, comm_link, listener, client_handler):
+        super(BroadcastMessageProcessor, self).__init__(uid, comm_link, listener, client_handler)
     
     def exec_command(self, cmd, msg, sig):
         
@@ -118,8 +116,8 @@ class BroadcastMessageProcessor(ServerCommandProcessor):
 
 class FexibleMessageProcessor(ServerCommandProcessor):
     
-    def init(self, uid, comm_link, listener, client_handler):
-        super(FexibleMessageProcessor, self).init(uid, comm_link, listener, client_handler)
+    def __init__(self, uid, comm_link, listener, client_handler):
+        super(FexibleMessageProcessor, self).__init__(uid, comm_link, listener, client_handler)
 
     def exec_command(self, cmd, msg, sig):
         
@@ -131,9 +129,8 @@ class FexibleMessageProcessor(ServerCommandProcessor):
             usrs = dict()
             for k in self.listener.clients:
                 l = self.listener.clients[k]
-                usrs.update({k:l.name})
-            # d = {'set_usrlist':}
-            # self.link.send_message(d)
+                usrs.update({l.name:k})
+            self.link.send_message(self.link.format_msg('set_usrlist', usrs))
         
         def send_to_all(msg):
             self.send_to_all(msg, self.uid)
@@ -141,7 +138,7 @@ class FexibleMessageProcessor(ServerCommandProcessor):
         def send_to_some(msg):
             m = msg['message']
             users = msg['users'].split(',')
-            
+            self.send_to_some(m, users, self.uid)
         
         if not locals().has_key(cmd): return
         cmd = locals()[cmd]
@@ -165,34 +162,52 @@ class FexibleMessageProcessor(ServerCommandProcessor):
         msg = n+': '+mesg
         for x in self.client_handler.active_clients:
             link = self.listener.get_client(x)
-            link.send_message(msg)
+            link.send_message(self.link.format_msg('chatmessage', msg))
     
     def send_to_some(self, mesg, users, from_usr):
         name = self.listener.get_client(from_usr).name
         u = self.users[name]
         n = u['l_name'] + ', ' + u['f_name']
         msg = n+': '+mesg
-        # for x in users:
-            # link = self.listener.get_client(x)
-            # if link: link.send_message(msg)
-            # else:
-                # self.link.send_message(
-        # self.link.send_message(msg)
+        for x in users:
+            link = self.listener.get_client(x)
+            if link: link.send_message(self.link.format_msg('chatmessage', msg))
+            else:
+                self.link.send_message(self.link.format_msg('error', 'user id %s did not exist' % (x,)))
+                return
+        self.link.send_message(self.link.format_msg('chatmessage', msg))
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+class ChatClientProcessor(ClientCommandProcessor):
+    
+    def __init__(self, printer): self.printer = printer
+    
+    def exec_command(self, cmd, msg, sig):
+        
+        def message(msg):
+            a = self.link.process(self.link.recieved_message(msg))
+            self.exec_command(*a)
+        
+        def error(msg):
+            self.printer.printInfo(msg)
+        
+        def set_usrlist(msg):
+            self.client.connected_users = msg
+        
+        def chatmessage(msg):
+            self.printer.printInfo(msg)
+            
+        if not locals().has_key(cmd): return
+        cmd = locals()[cmd]
+        
+        try:
+            if 'sig' in cmd.func_code.co_varnames and 'msg' in cmd.func_code.co_varnames: cmd(msg, sig)
+            elif 'msg' in cmd.func_code.co_varnames: cmd(msg)
+            else: cmd()
+        except Exception, e:
+            print '\n-----------ERROR-----------'
+            print 'error: ', e
+            print 'Error proccessing: ', cmd.__name__
+            print 'Message: ', msg
+            print 'Sig: ', sig
+            print '-----------ERROR-----------\n'

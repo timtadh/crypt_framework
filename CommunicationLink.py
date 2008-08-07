@@ -200,11 +200,6 @@ class PillowTalkLink(CommunicationLink):
     @authenticated_true_check
     @partner_secret_hash_check
     def send_message(self, msg):
-        print '\n--------------'
-        print qcrypt.normalize(self.aes_key)
-        print msg
-        print self.name
-        print '--------------\n'
         msg = qcrypt.aes_encrypt(msg, self.aes_key)
         self.send('message', msg)
     
@@ -215,9 +210,4 @@ class PillowTalkLink(CommunicationLink):
     @partner_secret_hash_check
     def recieved_message(self, msg):
         msg_d = qcrypt.aes_decrypt(msg, self.aes_key)
-        print '\n--------------'
-        print qcrypt.normalize(self.aes_key)
-        print msg_d
-        print self.name
-        print '--------------\n'
         return msg_d

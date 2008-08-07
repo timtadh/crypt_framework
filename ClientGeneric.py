@@ -62,7 +62,7 @@ class ClientGeneric(object):
         self.stopListening()
         self.disconnect()
     
-    def listen(self, lock=False, stuff=False):
+    def listen(self, lock=False):
         print 'listening'
         while not self.commGeneric.closed and self.link.authenticated and self.link.key_agreement:
             cmd, msg, sig = self.link.recieve()
@@ -77,4 +77,4 @@ class ClientGeneric(object):
         
         lock = thread.allocate_lock()
         lock.acquire()
-        thread.start_new_thread(self.listen, (lock, True))
+        thread.start_new_thread(self.listen, (lock,))
