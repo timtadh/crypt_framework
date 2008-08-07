@@ -11,7 +11,7 @@ from CommandProcessors import ClientCommandProcessor
 class ClientGeneric(object):
 
     def __init__(self, commGeneric, keyfile, comm_link_class, activationScript, \
-                 sys_processor_class=ClientCommandProcessor, usr_processor_class=ClientCommandProcessor):
+                 sys_processor=ClientCommandProcessor(), usr_processor=ClientCommandProcessor()):
         self.stop = False
         self.activate = activationScript
         self.keyfile = keyfile
@@ -19,26 +19,26 @@ class ClientGeneric(object):
         self.commGeneric = commGeneric
         self.link = comm_link_class(self.commGeneric, self.keyfile)
         
-        sys_proc = sys_processor_class(self.link, self)
-        usr_proc = usr_processor_class(self.link, self)
+        sys_processor.init(self.link, self)
+        usr_processor.init(self.link, self)
         
         def syscommands(data):
-            try: cmd, msg, sig = self.link.unpack_data(data)
+            try: cmd, msg, sig = self.link.process(data)
             except: return
             
             if cmd == 'stop': self.commGeneric.close()
             
-            sys_proc.exec_command(cmd, msg, sig)
+            sys_processor.exec_command(cmd, msg, sig)
         
         self.commGeneric.set_proc_syscommand(syscommands)
         
         def commands(data):
-            try: cmd, msg, sig = self.link.unpack_data(data)
+            try: cmd, msg, sig = self.link.process(data)
             except Exception, e:
                 print e
                 return
             
-            usr_proc.exec_command(cmd, msg, sig)
+            usr_processor.exec_command(cmd, msg, sig)
         
         self.commGeneric.set_proc_command(commands)
         

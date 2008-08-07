@@ -1,31 +1,34 @@
 from socket import *
 import thread
-import sys, re, os, nDDB, qcrypt, keyfile
+import sys, re, os, nDDB, qcrypt, keyfile, traceback
 import authenticator as auth
 from Crypto.Cipher import AES
 from Crypto.PublicKey import RSA
 from Crypto.Hash import SHA256
 from CommGenerics import SocketGeneric
 from CommunicationLink import PillowTalkLink
+from dec_factories import create_existance_check_dec, create_value_check_dec
 
 class CommandProcessor(object):
+    
+    def init(self): pass
     
     def exec_command(self, cmd, msg, sig): pass
 
 class ServerCommandProcessor(CommandProcessor):
     
-    def __init__(self, uid, comm_link, listener, client_handler):
+    def init(self, uid, comm_link, listener, client_handler):
         self.uid = uid
         self.link = comm_link
         self.listener = listener
         self.client_handler = client_handler
-        self.users = self.listener.keyfile['users']
+        self.users = self.listener.keyfile['users'] 
     
     def exec_command(self, cmd, msg, sig): pass
 
 class ClientCommandProcessor(CommandProcessor):
     
-    def __init__(self, comm_link, client_generic):
+    def init(self, comm_link, client_generic):
         self.client_generic = client_generic
         self.link = comm_link
     
@@ -33,11 +36,11 @@ class ClientCommandProcessor(CommandProcessor):
 
 class PillowTalkProcessor(ServerCommandProcessor):
     
-    def __init__(self, uid, comm_link, listener, client_handler):
-        super(PillowTalkProcessor, self).__init__(uid, comm_link, listener, client_handler)
+    def init(self, uid, comm_link, listener, client_handler):
+        super(PillowTalkProcessor, self).init(uid, comm_link, listener, client_handler)
     
     def exec_command(self, cmd, msg, sig):
-            
+        #print cmd, msg, sig
         def request_auth(msg): 
             self.link.name = msg
             self.link.partner_secret_hash = self.users[self.link.name]['pass_hash']
@@ -69,21 +72,21 @@ class PillowTalkProcessor(ServerCommandProcessor):
         except Exception, e:
             print '-----------ERROR-----------\n'
             print 'error: ', e
-            print 'Error proccessing: ', cmd
+            print 'Error proccessing: ', cmd.__name__
             print 'Message: ', msg
             print 'Sig: ', sig
             print '\n-----------ERROR-----------'
 
 class BroadcastMessageProcessor(ServerCommandProcessor):
     
-    def __init__(self, uid, comm_link, listener, client_handler):
-        super(BroadcastMessageProcessor, self).__init__(uid, comm_link, listener, client_handler)
+    def init(self, uid, comm_link, listener, client_handler):
+        super(BroadcastMessageProcessor, self).init(uid, comm_link, listener, client_handler)
     
     def exec_command(self, cmd, msg, sig):
         
         def message(msg):
             m = self.link.recieved_message(msg)
-            self._send(m, self.uid)
+            self.send_to_all(m, self.uid)
         
         if not locals().has_key(cmd): return
         cmd = locals()[cmd]
@@ -95,12 +98,12 @@ class BroadcastMessageProcessor(ServerCommandProcessor):
         except Exception, e:
             print '-----------ERROR-----------\n'
             print 'error: ', e
-            print 'Error proccessing: ', cmd
+            print 'Error proccessing: ', cmd.__name__
             print 'Message: ', msg
             print 'Sig: ', sig
             print '\n-----------ERROR-----------'
             
-    def _send(self, mesg, fromCli):
+    def send_to_all(self, mesg, fromCli):
         name = self.listener.get_client(fromCli).name
         u = self.users[name]
         n = u['l_name'] + ', ' + u['f_name']
@@ -111,4 +114,85 @@ class BroadcastMessageProcessor(ServerCommandProcessor):
                 link.send_message(msg)
             except:
                 pass
-                
+
+
+class FexibleMessageProcessor(ServerCommandProcessor):
+    
+    def init(self, uid, comm_link, listener, client_handler):
+        super(FexibleMessageProcessor, self).init(uid, comm_link, listener, client_handler)
+
+    def exec_command(self, cmd, msg, sig):
+        
+        def message(msg):
+            a = self.link.process(self.link.recieved_message(msg))
+            self.exec_command(*a)
+        
+        def get_usrlist():
+            usrs = dict()
+            for k in self.listener.clients:
+                l = self.listener.clients[k]
+                usrs.update({k:l.name})
+            # d = {'set_usrlist':}
+            # self.link.send_message(d)
+        
+        def send_to_all(msg):
+            self.send_to_all(msg, self.uid)
+        
+        def send_to_some(msg):
+            m = msg['message']
+            users = msg['users'].split(',')
+            
+        
+        if not locals().has_key(cmd): return
+        cmd = locals()[cmd]
+        
+        try:
+            if 'sig' in cmd.func_code.co_varnames and 'msg' in cmd.func_code.co_varnames: cmd(msg, sig)
+            elif 'msg' in cmd.func_code.co_varnames: cmd(msg)
+            else: cmd()
+        except Exception, e:
+            print '\n-----------ERROR-----------'
+            print 'error: ', e
+            print 'Error proccessing: ', cmd.__name__
+            print 'Message: ', msg
+            print 'Sig: ', sig
+            print '-----------ERROR-----------\n'
+            
+    def send_to_all(self, mesg, from_usr):
+        name = self.listener.get_client(from_usr).name
+        u = self.users[name]
+        n = u['l_name'] + ', ' + u['f_name']
+        msg = n+': '+mesg
+        for x in self.client_handler.active_clients:
+            link = self.listener.get_client(x)
+            link.send_message(msg)
+    
+    def send_to_some(self, mesg, users, from_usr):
+        name = self.listener.get_client(from_usr).name
+        u = self.users[name]
+        n = u['l_name'] + ', ' + u['f_name']
+        msg = n+': '+mesg
+        # for x in users:
+            # link = self.listener.get_client(x)
+            # if link: link.send_message(msg)
+            # else:
+                # self.link.send_message(
+        # self.link.send_message(msg)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

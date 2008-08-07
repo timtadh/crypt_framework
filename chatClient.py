@@ -59,6 +59,13 @@ class Gui:
         except:
             pass
 
+class ChatClientProcessor(ClientCommandProcessor):
+    def __init__(self, printer): self.printer = printer
+    def exec_command(self, cmd, msg, sig):
+        if cmd == 'message':
+            msg = self.link.recieved_message(msg)
+            self.printer.printInfo(msg)
+
 class tcpClient(ClientGeneric):
 
     def __init__(self, printer, host, port=21567, bufsize=1024):
@@ -73,16 +80,10 @@ class tcpClient(ClientGeneric):
         self.keyfile = keyfile.load_client_keyfile(raw_input('key file path: '))
         self.password = raw_input('password: ')
         
-        class ChatClientProcessor(ClientCommandProcessor):
-            def exec_command(self, cmd, msg, sig):
-                if cmd == 'message':
-                    msg = self.link.recieved_message(msg)
-                    printer.printInfo(msg)
-        
         commGeneric = SocketGeneric(host, port, bufsize)
         
         super(tcpClient, self).__init__(commGeneric, self.keyfile, PillowTalkLink, PillowTalkActivator, \
-                                        usr_processor_class=ChatClientProcessor)
+                                        usr_processor=ChatClientProcessor(self.printer))
         self.link.secret = self.password
         
         def customExit():
@@ -92,6 +93,10 @@ class tcpClient(ClientGeneric):
                 sys.exit()
             except: pass
         self.exit = customExit
+    
+    def send(self, data):
+        m = self.link.format_msg('send_to_all', data)
+        super(tcpClient, self).send(m)
 
 printer = output()
 tcpclient = tcpClient(printer, 'localhost')

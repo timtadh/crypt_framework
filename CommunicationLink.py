@@ -12,7 +12,7 @@ AES_SET_MSG = 'AES Key Set'
 class CommunicationLink(object):
     def __init__(self, comm): pass
     def send(self, msg): pass
-    def unpack_data(self, data): pass 
+    def process(self, data): pass 
     def recieve(self): pass
 
 auth_msg_check = create_existance_check_dec('auth_msg')
@@ -61,22 +61,30 @@ class PillowTalkLink(CommunicationLink):
         self.aes_key = None
         self.key_agreement = False
     
-    def send(self, msg_type, msg, signature=None):
-        if signature: d = {'type':msg_type, 'value':msg, 'signature':signature}
-        else: d = {'type':msg_type, 'value':msg}
-        try: self.comm.send(nDDB.encode(d))
-        except Exception, e: 
+    def format_msg(self, cmd, msg, sig=None):
+        if sig: d = {'cmd':cmd, 'msg':msg, 'sig':sig}
+        else: d = {'cmd':cmd, 'msg':msg}
+        return nDDB.encode(d)
+    
+    def send(self, cmd, msg, sig=None):
+        try: self.comm.send(self.format_msg(cmd, msg, sig))
+        except Exception, e:
             print e
     
-    def unpack_data(self, data):
-        d = nDDB.decode(data)
-        if (not (d.has_key('type') or d.has_key('value'))): return None, None, None
-        if d.has_key('signature'): return d['type'], d['value'], d['signature']
-        return d['type'], d['value'], None
+    def process(self, data):
+        #print '\n--------------'
+        #print data
+        try: d = nDDB.decode(data)
+        except: return None, None, None
+        #print d
+        #print '--------------\n'
+        if not d or (not (d.has_key('cmd') or d.has_key('msg'))): return None, None, None
+        if d.has_key('sig'): return d['cmd'], d['msg'], d['sig']
+        return d['cmd'], d['msg'], None
     
     def recieve(self):
         data = self.comm.recieve()
-        return self.unpack_data(data)
+        return self.process(data)
     
     def begin_auth(self, extra_info=None):
         self.send('request_auth', extra_info)
@@ -192,6 +200,11 @@ class PillowTalkLink(CommunicationLink):
     @authenticated_true_check
     @partner_secret_hash_check
     def send_message(self, msg):
+        print '\n--------------'
+        print qcrypt.normalize(self.aes_key)
+        print msg
+        print self.name
+        print '--------------\n'
         msg = qcrypt.aes_encrypt(msg, self.aes_key)
         self.send('message', msg)
     
@@ -202,4 +215,9 @@ class PillowTalkLink(CommunicationLink):
     @partner_secret_hash_check
     def recieved_message(self, msg):
         msg_d = qcrypt.aes_decrypt(msg, self.aes_key)
+        print '\n--------------'
+        print qcrypt.normalize(self.aes_key)
+        print msg_d
+        print self.name
+        print '--------------\n'
         return msg_d

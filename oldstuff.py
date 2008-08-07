@@ -69,7 +69,7 @@ class tcpClient:
     def listen(self, lock=False, stuff=False):
         print 'listening'
         while not self.sockg.closed and self.link.authenticated and self.link.key_agreement:
-            cmd, msg, sig = self.unpack_data(self.sockg.recieve())
+            cmd, msg, sig = self.process(self.sockg.recieve())
             
             try:
                 if cmd == 'message':
@@ -86,7 +86,7 @@ class tcpClient:
             sys.exit()
         except: pass
     
-    def unpack_data(self, data):
+    def process(self, data):
         d = nDDB.decode(data)
         if (not (d.has_key('type') or d.has_key('value'))): return None, None, None
         if d.has_key('signature'): return d['type'], d['value'], d['signature']
@@ -97,10 +97,10 @@ class tcpClient:
         
         while not (self.sockg.closed or self.link.authenticated):
             self.link.begin_auth(self.user['login_name'])
-            cmd, msg, sig = self.unpack_data(self.sockg.recieve())
+            cmd, msg, sig = self.process(self.sockg.recieve())
             if cmd != 'sign_auth': continue
             self.link.sign_auth(msg)
-            cmd, msg, sig = self.unpack_data(self.sockg.recieve())
+            cmd, msg, sig = self.process(self.sockg.recieve())
             if cmd != 'verification_result': continue
             msg = qcrypt.denormalize(msg)
             msg_vr = auth.verify_signature(self.link.secret, self.link.salt, msg, sig)
@@ -112,7 +112,7 @@ class tcpClient:
                 sys.exit()
             
             self.link.request_auth()
-            cmd, msg, sig = self.unpack_data(self.sockg.recieve())
+            cmd, msg, sig = self.process(self.sockg.recieve())
             if cmd != 'verify_auth': continue
             vr = self.link.verify_auth(msg)
             if not vr:
@@ -122,7 +122,7 @@ class tcpClient:
         
         while not self.sockg.closed and self.link.authenticated and not self.link.pub_key:
             self.sockg.send_dict({'type':'request_pub_key', 'value':None})
-            cmd, msg, sig = self.unpack_data(self.sockg.recieve())
+            cmd, msg, sig = self.process(self.sockg.recieve())
             if cmd != 'set_pub_key': continue
             self.link.set_pub_key(msg, sig)
         
@@ -130,7 +130,7 @@ class tcpClient:
             
         while not self.sockg.closed and self.link.key_agreement == False:
             self.link.send_new_aes_key()
-            cmd, msg, sig = self.unpack_data(self.sockg.recieve())
+            cmd, msg, sig = self.process(self.sockg.recieve())
             if cmd != 'confirm_aeskey': continue
             self.link.confirm_aes_key_set(msg, sig)
         

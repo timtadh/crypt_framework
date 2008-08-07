@@ -65,11 +65,13 @@ class GenericServer_ClientHandler(object):
     def handle(self, uid, comm_link, lock):
         self.active_clients.append(uid)
         comm_generic = comm_link.comm
-        sys_proc = self.sys_processor_class(uid, comm_link, self.server_listener, self)
-        usr_proc = self.usr_processor_class(uid, comm_link, self.server_listener, self)
+        sys_proc = self.sys_processor_class()
+        sys_proc.init(uid, comm_link, self.server_listener, self)
+        usr_proc = self.usr_processor_class()
+        usr_proc.init(uid, comm_link, self.server_listener, self)
         
         def syscommands(data):
-            try: cmd, msg, sig = comm_link.unpack_data(data)
+            try: cmd, msg, sig = comm_link.process(data)
             except: return
             
             if cmd == 'stop':  
@@ -81,7 +83,7 @@ class GenericServer_ClientHandler(object):
         comm_generic.set_proc_syscommand(syscommands)
         
         def commands(data):
-            try: cmd, msg, sig = comm_link.unpack_data(data)
+            try: cmd, msg, sig = comm_link.process(data)
             except: return
             
             usr_proc.exec_command(cmd, msg, sig)
