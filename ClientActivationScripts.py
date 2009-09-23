@@ -1,7 +1,7 @@
 from Tkinter import *
 from socket import *
 import thread
-import sys, re, os, nDDB, qcrypt, keyfile
+import sys, re, os, nDDB, qcrypt, keyfile, time
 import authenticator as auth
 from Crypto.PublicKey import RSA
 from Crypto.Hash import SHA256
@@ -48,3 +48,6 @@ def PillowTalkActivator(client):
         cmd, msg, sig = client.link.recieve()
         if cmd != 'confirm_aeskey': continue
         client.link.confirm_aes_key_set(msg, sig)
+
+def SmtpActivator(client):
+    pass
